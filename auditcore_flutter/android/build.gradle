@@ -1,0 +1,21 @@
+// build.gradle (raíz) — formato declarativo Flutter 3.24+
+// Los plugins ya se declaran en settings.gradle, aquí solo va config global.
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = "../build"
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+subprojects {
+    project.evaluationDependsOn(':app')
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
+}

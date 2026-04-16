@@ -1,0 +1,178 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: auditcore
+      POSTGRES_USER: auditcore_user
+      POSTGRES_PASSWORD: auditcore2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - auditcore_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auditcore_user -d auditcore"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - auditcore_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: auditcore
+      RABBITMQ_DEFAULT_PASS: auditcore2026
+      RABBITMQ_DEFAULT_VHOST: auditcore
+      RABBITMQ_LOOPBACK_USERS: "none"
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - auditcore_net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  backend:
+    build: ./auditcore_backend
+    env_file: ./auditcore_backend/.env
+    environment:
+      - DATABASE_URL=postgres://auditcore_user:auditcore2026@postgres:5432/auditcore
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://auditcore:auditcore2026@rabbitmq:5672/auditcore?heartbeat=120
+      - OLLAMA_BASE_URL=https://santiagoherazo.ddns.net:11435
+      - OLLAMA_SSL_VERIFY=False
+      - OLLAMA_MODEL=llama3.1:8b
+      - DJANGO_SETTINGS_MODULE=config.settings.development
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./auditcore_backend:/app
+      - media_data:/app/media
+      - static_data:/app/staticfiles   # FIX: compartido con frontend para que Nginx sirva /static/
+      - logs_data:/app/logs             # IDS: logs JSON-Lines del chatbot pipeline
+    networks:
+      - auditcore_net
+    command: ["sh", "/app/entrypoint.sh"]
+    # FIX: usar unless-stopped en vez de on-failure para que el backend
+    # se reinicie automáticamente si RabbitMQ se cae y vuelve a subir.
+    # on-failure solo reinicia en crash (exit code != 0); unless-stopped
+    # reinicia siempre que el contenedor se detenga por cualquier razón.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/auth/setup/status/')\" 2>/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  celery_worker:
+    build: ./auditcore_backend
+    env_file: ./auditcore_backend/.env
+    environment:
+      - DATABASE_URL=postgres://auditcore_user:auditcore2026@postgres:5432/auditcore
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://auditcore:auditcore2026@rabbitmq:5672/auditcore?heartbeat=120
+      - OLLAMA_BASE_URL=https://santiagoherazo.ddns.net:11435
+      - OLLAMA_SSL_VERIFY=False
+      - OLLAMA_MODEL=llama3.1:8b
+      - DJANGO_SETTINGS_MODULE=config.settings.development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./auditcore_backend:/app
+      - media_data:/app/media
+      - logs_data:/app/logs             # IDS: mismo volumen que backend
+    networks:
+      - auditcore_net
+    entrypoint: ["sh", "/app/entrypoint_celery.sh"]
+    command: ["celery", "-A", "config.celery", "worker",
+              "-l", "info",
+              "-Q", "default,notificaciones,reportes",
+              "-c", "1",
+              "--prefetch-multiplier", "1",
+              "--max-tasks-per-child", "50"]
+    restart: unless-stopped
+
+  celery_beat:
+    build: ./auditcore_backend
+    env_file: ./auditcore_backend/.env
+    environment:
+      - DATABASE_URL=postgres://auditcore_user:auditcore2026@postgres:5432/auditcore
+      - REDIS_URL=redis://redis:6379/0
+      - RABBITMQ_URL=amqp://auditcore:auditcore2026@rabbitmq:5672/auditcore?heartbeat=120
+      - DJANGO_SETTINGS_MODULE=config.settings.development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    volumes:
+      - ./auditcore_backend:/app
+    networks:
+      - auditcore_net
+    entrypoint: ["sh", "/app/entrypoint_celery.sh"]
+    command: ["celery", "-A", "config.celery", "beat",
+              "-l", "info",
+              "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+    restart: on-failure
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./auditcore_flutter/build/web:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - media_data:/app/media:ro          # FIX: Nginx sirve /media/ directamente
+      - static_data:/app/staticfiles:ro   # FIX: Nginx sirve /static/ (Django Admin)
+    depends_on:
+      - backend
+    networks:
+      - auditcore_net
+    restart: on-failure
+
+networks:
+  auditcore_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  media_data:
+  static_data:       # FIX: nuevo volumen compartido para archivos estáticos de Django
+  rabbitmq_data:
+  logs_data:    # IDS logs compartido entre backend y celery_worker

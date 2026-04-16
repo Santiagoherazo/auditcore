@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Configuración de seguridad de red para AuditCore Android.
+
+    EMULADOR: 10.0.2.2 es la IP especial que el emulador de Android Studio
+    usa para acceder al localhost de la máquina host. Docker corre en la
+    máquina host, por eso la API es accesible en 10.0.2.2:3000.
+
+    DISPOSITIVO FÍSICO: usar la IP LAN de la máquina host (ej: 192.168.1.X).
+    Ver instrucciones en android/ANDROID_SETUP.md.
+
+    PRODUCCIÓN: solo se permite HTTPS. Remover los dominios de cleartextPermitted.
+-->
+<network-security-config>
+
+    <!-- Emulador Android Studio: 10.0.2.2 → localhost de la máquina host -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+
+    <!-- Desarrollo en dispositivo físico por IP LAN (reemplaza con tu IP) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.1.100</domain>
+    </domain-config>
+
+    <!-- localhost para casos edge (Chrome en Android, etc.) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+
+    <!-- Regla base: todo lo demás requiere HTTPS -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+</network-security-config>

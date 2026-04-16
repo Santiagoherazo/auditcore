@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <!--
+    CRÍTICO para PathUrlStrategy (URLs sin #):
+    El <base href="/"> debe ser el PRIMER tag del <head>.
+    Sin esto, Flutter Web carga recursos con rutas relativas rotas
+    cuando el usuario navega a /dashboard, /setup, etc.
+  -->
+  <base href="/">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="AuditCore — Plataforma de gestión de auditorías">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="AuditCore">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="icons/Icon-192.png"/>
+
+  <title>AuditCore</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1a1f36">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+  <style>
+    /* Pantalla de carga mientras Flutter inicializa */
+    body {
+      margin: 0;
+      background-color: #1a1f36;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    #loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    #loading svg {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    #loading p {
+      color: rgba(255,255,255,0.6);
+      font-family: sans-serif;
+      font-size: 14px;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Splash de carga visible antes de que Flutter arranque -->
+  <div id="loading">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+      <path d="M12 2L3 7l9 5 9-5-9-5z" fill="rgba(255,255,255,0.9)"/>
+      <path d="M3 12l9 5 9-5" stroke="rgba(255,255,255,0.5)" stroke-width="1.5" fill="none"/>
+      <path d="M3 17l9 5 9-5" stroke="rgba(255,255,255,0.3)" stroke-width="1.5" fill="none"/>
+    </svg>
+    <p>AuditCore</p>
+  </div>
+
+  <script>
+    // Ocultar el splash cuando Flutter esté listo
+    window.addEventListener('flutter-first-frame', function() {
+      var loading = document.getElementById('loading');
+      if (loading) loading.style.display = 'none';
+    });
+  </script>
+
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

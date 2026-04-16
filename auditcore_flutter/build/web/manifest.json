@@ -1,0 +1,9 @@
+{
+  "name": "AuditCore",
+  "short_name": "AuditCore",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1B3A6B",
+  "theme_color": "#2E75B6",
+  "description": "Plataforma de Gestión de Auditorías y Certificaciones"
+}

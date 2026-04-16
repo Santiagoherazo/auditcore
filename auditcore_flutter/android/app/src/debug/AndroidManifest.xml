@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Manifest de debug — sobrescribe atributos del manifest principal para desarrollo -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application
+        tools:replace="android:usesCleartextTraffic"
+        android:usesCleartextTraffic="true"/>
+
+</manifest>

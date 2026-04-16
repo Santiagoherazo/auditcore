@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: A4; margin: 2cm 2.5cm; }
+  body { font-family: 'Arial', sans-serif; color: #1e293b; font-size: 10pt; }
+  .header { text-align: center; border-bottom: 3px solid #0F2447; padding-bottom: 20px; margin-bottom: 20px; }
+  .logo-text { font-size: 28pt; font-weight: bold; color: #0F2447; }
+  .cert-number { font-size: 14pt; color: #1A56DB; font-weight: bold; margin: 8px 0; }
+  h2 { color: #0F2447; font-size: 13pt; border-bottom: 1px solid #CBD5E1; padding-bottom: 4px; margin-top: 20px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 9pt; }
+  th { background: #0F2447; color: white; padding: 6px 8px; text-align: left; }
+  td { padding: 5px 8px; border-bottom: 1px solid #E2E8F0; }
+  tr:nth-child(even) td { background: #F8FAFC; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 8pt; }
+  .critico { background: #FEE2E2; color: #991B1B; }
+  .mayor   { background: #FEF3C7; color: #92400E; }
+  .menor   { background: #ECFDF5; color: #065F46; }
+  .footer  { text-align: center; margin-top: 30px; padding-top: 10px; border-top: 1px solid #CBD5E1; font-size: 8pt; color: #94A3B8; }
+  .qr-section { text-align: center; margin: 20px 0; }
+  .firma-grid { display: flex; gap: 40px; margin-top: 30px; }
+  .firma-box  { flex: 1; text-align: center; border-top: 1px solid #475569; padding-top: 8px; font-size: 8pt; }
+  .avance-bar { background: #E2E8F0; border-radius: 4px; height: 12px; }
+  .avance-fill { background: #0E7490; border-radius: 4px; height: 12px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-text">🛡️ AuditCore</div>
+  <div style="color:#64748B;margin:4px 0">Plataforma de Gestión de Auditorías y Certificaciones</div>
+  <div class="cert-number">{{ cert.numero }}</div>
+  <div style="font-size:9pt;color:#94A3B8">Emitido el {{ cert.fecha_emision|date:"d/m/Y" }} — Válido hasta {{ cert.fecha_vencimiento|date:"d/m/Y" }}</div>
+</div>
+
+<h2>Información de la Certificación</h2>
+<table>
+  <tr><td width="35%"><strong>Cliente</strong></td><td>{{ cliente.razon_social }}</td></tr>
+  <tr><td><strong>NIT</strong></td><td>{{ cliente.nit }}</td></tr>
+  <tr><td><strong>Tipo de Auditoría</strong></td><td>{{ tipo.nombre }}</td></tr>
+  <tr><td><strong>Expediente</strong></td><td>{{ expediente.numero_expediente }}</td></tr>
+  <tr><td><strong>Estado</strong></td><td>{{ cert.get_estado_display }}</td></tr>
+  <tr><td><strong>% Cumplimiento</strong></td><td>
+    <div class="avance-bar"><div class="avance-fill" style="width:{{ expediente.porcentaje_avance }}%"></div></div>
+    {{ expediente.porcentaje_avance }}%
+  </td></tr>
+</table>
+
+<h2>Equipo Auditor</h2>
+<table>
+  <tr><th>Nombre</th><th>Rol</th></tr>
+  {% for m in equipo %}
+  <tr><td>{{ m.usuario.nombre_completo }}</td><td>{{ m.get_rol_display }}</td></tr>
+  {% endfor %}
+</table>
+
+{% if hallazgos %}
+<h2>Resumen de Hallazgos</h2>
+<table>
+  <tr><th>Título</th><th>Criticidad</th><th>Estado</th></tr>
+  {% for h in hallazgos %}
+  <tr>
+    <td>{{ h.titulo }}</td>
+    <td><span class="badge {{ h.nivel_criticidad|lower }}">{{ h.nivel_criticidad }}</span></td>
+    <td>{{ h.estado }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<div class="qr-section">
+  <p style="font-size:9pt;color:#64748B">Verifica la autenticidad de este certificado:</p>
+  <strong style="font-size:11pt;color:#1A56DB">{{ base_url }}/verificar?codigo={{ cert.codigo_verificacion }}</strong>
+  <p style="font-size:8pt;color:#94A3B8">Código de verificación: {{ cert.codigo_verificacion }}</p>
+</div>
+
+<div class="firma-grid">
+  <div class="firma-box">
+    <strong>{{ expediente.auditor_lider.nombre_completo }}</strong><br>
+    Auditor Líder
+  </div>
+  <div class="firma-box">
+    <strong>AuditCore</strong><br>
+    Empresa Certificadora
+  </div>
+</div>
+
+<div class="footer">
+  Este certificado fue generado digitalmente por AuditCore. Verificable en {{ base_url }}/verificar?codigo={{ cert.codigo_verificacion }}
+</div>
+</body>
+</html>

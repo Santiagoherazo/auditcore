@@ -1,0 +1,53 @@
+# ─── Django Core ───────────────────────────────────────────────────────────────
+Django>=5.2,<5.3
+djangorestframework>=3.15,<3.16
+djangorestframework-simplejwt>=5.3,<6.0
+django-cors-headers>=4.0,<5.0
+django-filter>=24.0,<25.0
+drf-spectacular>=0.27,<0.28
+
+# ─── Base de datos ─────────────────────────────────────────────────────────────
+psycopg2-binary>=2.9,<3.0
+dj-database-url>=2.0,<3.0
+
+# ─── WebSockets / ASGI ─────────────────────────────────────────────────────────
+channels>=4.0,<5.0
+channels-redis>=4.0,<5.0
+daphne>=4.0,<5.0
+
+# ─── Celery + RabbitMQ broker + Redis result backend ───────────────────────────
+celery>=5.3,<6.0
+# RabbitMQ transport (AMQP) — broker de tareas
+amqp>=5.2,<6.0
+# kombu[redis] — imprescindible para que Celery use Redis como result backend.
+# Sin esto Celery lanza: "No module named 'redis'" al intentar guardar resultados.
+kombu[redis]>=5.3,<6.0
+# redis — cliente Python que kombu[redis] y channels-redis necesitan internamente.
+redis>=5.0,<6.0
+django-celery-beat>=2.5,<3.0
+
+# ─── MFA TOTP ──────────────────────────────────────────────────────────────────
+pyotp>=2.9,<3.0
+qrcode[pil]>=7.4,<8.0
+Pillow>=10.0,<11.0
+
+# ─── PDF ───────────────────────────────────────────────────────────────────────
+weasyprint>=62.0,<63.0
+
+# ─── Excel ─────────────────────────────────────────────────────────────────────
+openpyxl>=3.1,<4.0
+pypdf>=4.0,<5.0                 # Extracción de texto PDF para análisis de documentos
+python-docx>=1.1,<2.0           # Extracción de texto Word para análisis de documentos
+
+# ─── Utilidades ────────────────────────────────────────────────────────────────
+python-decouple>=3.8,<4.0
+
+# ─── HTTP (cliente Ollama en workers/chatbot.py) ───────────────────────────────
+requests>=2.31,<3.0
+
+# ─── Testing ───────────────────────────────────────────────────────────────────
+pytest>=8.0,<9.0
+pytest-django>=4.8,<5.0
+pytest-cov>=5.0,<6.0
+factory-boy>=3.3,<4.0
+psutil>=5.9,<6.0                # Monitoreo de memoria, CPU y disco para auditlog

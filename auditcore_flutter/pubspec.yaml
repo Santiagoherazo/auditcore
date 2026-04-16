@@ -1,0 +1,60 @@
+name: auditcore
+description: Plataforma digital de gestión de auditorías y certificaciones.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # HTTP y API
+  dio: ^5.7.0                     # FIX: era 5.4.3 — fixes en interceptors Android
+
+  # Estado
+  flutter_riverpod: ^2.6.1        # FIX: era 2.5.1
+
+  # Navegación
+  go_router: ^14.6.3              # FIX: era 14.2.7 — fix navegación Android 14+
+
+  # WebSockets
+  web_socket_channel: ^3.0.1      # FIX: era 2.4.5 — v3 requerida por Flutter 3.27+
+
+  # Archivos — v9 corrige crash en Android 14 con SAF (Storage Access Framework)
+  file_picker: ^9.0.0             # FIX: era 8.0.7
+
+  # Formato de fechas — debe coincidir con flutter_localizations del SDK
+  intl: ^0.20.2
+
+  # Variables de entorno
+  flutter_dotenv: ^5.2.1          # FIX: era 5.1.0 — fix assets en Android release
+
+  # Persistencia de sesión (tokens seguros entre recargas)
+  flutter_secure_storage: ^9.2.4  # FIX: era 9.2.2 — patch Android KeyStore
+
+  # URL limpias en web (sin el # del hash routing)
+  # flutter_web_plugins viene incluido en el SDK de Flutter — no requiere pub.dev
+
+  # UI components
+  flutter_svg: ^2.0.17            # FIX: era 2.0.10+1
+  shimmer: ^3.0.0
+  percent_indicator: ^4.2.3
+  badges: ^3.1.2
+  fl_chart: ^0.69.0               # FIX: era 0.68.0 — fix render Android
+
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  riverpod_annotation: ^2.3.5
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
