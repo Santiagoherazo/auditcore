@@ -1,0 +1,60 @@
+# ── Secretos y configuración sensible ────────────────────────────────────────
+# NUNCA commitear estos archivos al repositorio
+.env
+.env.local
+.env.production
+*.env
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+
+# ── Django ────────────────────────────────────────────────────────────────────
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# ── Docker volumes / datos locales ───────────────────────────────────────────
+postgres_data/
+redis_data/
+rabbitmq_data/
+
+# ── Flutter / Dart ────────────────────────────────────────────────────────────
+auditcore_flutter/.dart_tool/
+auditcore_flutter/.flutter-plugins
+auditcore_flutter/.flutter-plugins-dependencies
+auditcore_flutter/.packages
+auditcore_flutter/build/
+auditcore_flutter/.idea/
+auditcore_flutter/android/local.properties
+auditcore_flutter/android/.gradle/
+auditcore_flutter/android/captures/
+
+# ── IDEs ──────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Cobertura y testing ───────────────────────────────────────────────────────
+.coverage
+.pytest_cache/
+htmlcov/
+.tox/
+
+# ── Celery ────────────────────────────────────────────────────────────────────
+celerybeat-schedule
+celerybeat.pid

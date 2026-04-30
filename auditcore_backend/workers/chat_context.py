@@ -164,19 +164,31 @@ def invalidar_expedientes_usuario(usuario_id: str) -> None:
 def _build_expedientes_usuario(usuario_id: str, rol: str) -> list[dict]:
     try:
         from apps.expedientes.models import Expediente
+        from django.db.models import Q
         qs = Expediente.objects.select_related('cliente', 'tipo_auditoria')
 
         if rol == 'SUPERVISOR':
+            # Supervisor ve todos los expedientes activos
             qs = qs.filter(estado__in=['ACTIVO', 'EN_EJECUCION'])
-        elif rol in ('SUPERVISOR', 'AUDITOR'):
-            qs = qs.filter(auditor_lider_id=usuario_id,
-                           estado__in=['ACTIVO', 'EN_EJECUCION'])
         elif rol == 'AUDITOR':
-            qs = qs.filter(equipo__usuario_id=usuario_id,
-                           estado__in=['ACTIVO', 'EN_EJECUCION']).distinct()
+            # Auditor ve expedientes donde es líder O donde está en el equipo
+            qs = qs.filter(
+                Q(auditor_lider_id=usuario_id) |
+                Q(equipo__usuario_id=usuario_id, equipo__activo=True),
+                estado__in=['ACTIVO', 'EN_EJECUCION'],
+            ).distinct()
         elif rol == 'ASESOR':
-            qs = qs.filter(ejecutivo_id=usuario_id,
-                           estado__in=['ACTIVO', 'EN_EJECUCION'])
+            qs = qs.filter(
+                ejecutivo_id=usuario_id,
+                estado__in=['ACTIVO', 'EN_EJECUCION'],
+            )
+        elif rol in ('AUXILIAR', 'REVISOR'):
+            # Auxiliar y Revisor ven solo los expedientes donde están en el equipo
+            qs = qs.filter(
+                equipo__usuario_id=usuario_id,
+                equipo__activo=True,
+                estado__in=['ACTIVO', 'EN_EJECUCION'],
+            ).distinct()
         else:
             return []
 

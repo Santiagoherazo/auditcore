@@ -47,14 +47,14 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
-    # DeepAuditMiddleware: logging profundo JSON-Lines a /app/logs/auditcore.log
-    # Complementa apps.seguridad.middleware.AuditLogMiddleware (BD, rutas sensibles).
-    # Va aquí, tras CorsMiddleware pero antes del auth middleware, para capturar
-    # el user autenticado correctamente en _get_user() tras AuthenticationMiddleware.
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # DeepAuditMiddleware: logging profundo JSON-Lines a /app/logs/auditcore.log
+    # Complementa apps.seguridad.middleware.AuditLogMiddleware (BD, rutas sensibles).
+    # DEBE ir DESPUÉS de AuthenticationMiddleware para que _get_user() pueda
+    # leer request.user autenticado correctamente.
     'adapters.realtime.auditlog.DeepAuditMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -284,6 +284,18 @@ USE_I18N      = True
 USE_TZ        = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# ── Seguridad HTTP — cabeceras de defensa en profundidad ──────────────────────
+# Estas cabeceras aplican tanto en desarrollo como en producción.
+# production.py añade las directivas HTTPS-only encima de estas.
+SECURE_CONTENT_TYPE_NOSNIFF = True       # Previene MIME-sniffing attacks
+SECURE_BROWSER_XSS_FILTER   = True       # X-XSS-Protection: 1; mode=block (IE/Edge legacy)
+X_FRAME_OPTIONS              = 'DENY'    # Previene clickjacking
+REFERRER_POLICY              = 'strict-origin-when-cross-origin'
+
+# Límite de tamaño de archivo en uploads (55 MB — consistente con nginx.conf)
+DATA_UPLOAD_MAX_MEMORY_SIZE  = 57_671_680   # 55 MB en bytes
+FILE_UPLOAD_MAX_MEMORY_SIZE  = 57_671_680   # 55 MB en bytes
 
 from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {

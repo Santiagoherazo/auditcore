@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from django.db.models import Count, Q
 
@@ -59,6 +60,7 @@ from adapters.api.serializers import (
     TipoAuditoriaSerializer,
     EsquemaFormularioSerializer, ValorFormularioSerializer,
     ExpedienteSerializer, ExpedienteListSerializer, BitacoraSerializer,
+    FaseExpedienteSerializer, AsignacionSerializer,
     HallazgoSerializer, EvidenciaSerializer, ChecklistEjecucionSerializer,
     DocumentoExpedienteSerializer,
     CertificacionSerializer,
@@ -232,6 +234,9 @@ class ClienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ('list', 'retrieve', 'dashboard'):
             return [IsPersonalInterno()]
+        if self.action == 'cambiar_estado':
+            return [IsSupervisorOrAsesor()]
+        # create, update, partial_update, destroy: solo SUPERVISOR y ASESOR
         return [CanCreateClientes()]
 
     def get_queryset(self):
@@ -265,6 +270,52 @@ class ClienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
             'certificaciones_vigentes':   certificaciones.filter(estado='VIGENTE').count(),
             'certificaciones_por_vencer': certificaciones.filter(estado='POR_VENCER').count(),
             'certificaciones_vencidas':   certificaciones.filter(estado='VENCIDA').count(),
+        })
+
+    _TRANSICIONES_CLIENTE = {
+        'PROSPECTO':     ['EN_EVALUACION', 'INACTIVO'],
+        'EN_EVALUACION': ['ACTIVO', 'PROSPECTO', 'INACTIVO'],
+        'ACTIVO':        ['SUSPENDIDO', 'INACTIVO'],
+        'SUSPENDIDO':    ['ACTIVO', 'INACTIVO'],
+        'INACTIVO':      ['ACTIVO'],
+    }
+
+    @action(detail=True, methods=['post'], url_path='cambiar-estado',
+            permission_classes=[IsSupervisorOrAsesor])
+    def cambiar_estado(self, request, pk=None):
+        """
+        POST /api/clientes/{id}/cambiar-estado/
+        Cambia el estado del cliente con validación de transición.
+        Separado del PATCH para que 'estado' pueda ser read_only en el serializer.
+        """
+        cliente      = self.get_object()
+        nuevo_estado = request.data.get('estado', '').strip()
+        motivo       = request.data.get('motivo', '').strip()
+
+        estados_validos = [s[0] for s in cliente.ESTADO_CHOICES]
+        if nuevo_estado not in estados_validos:
+            return Response(
+                {'error': f'Estado inválido. Opciones: {estados_validos}'},
+                status=400,
+            )
+
+        permitidos = self._TRANSICIONES_CLIENTE.get(cliente.estado, [])
+        if nuevo_estado not in permitidos:
+            return Response({
+                'error': (
+                    f'Transición inválida: {cliente.estado} → {nuevo_estado}. '
+                    f'Transiciones permitidas: {permitidos if permitidos else "ninguna"}'
+                )
+            }, status=400)
+
+        estado_anterior  = cliente.estado
+        cliente.estado   = nuevo_estado
+        cliente.save(update_fields=['estado'])
+        return Response({
+            'detail':          f'Estado cambiado de {estado_anterior} a {nuevo_estado}.',
+            'estado_anterior': estado_anterior,
+            'estado_nuevo':    nuevo_estado,
+            'motivo':          motivo,
         })
 
 
@@ -303,12 +354,20 @@ class AccesoTemporalView(APIView):
 
     def post(self, request):
         from apps.clientes.models import AccesoTemporalCaracterizacion
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
         cliente_id   = request.data.get('cliente_id')
         contacto_id  = request.data.get('contacto_id')
         email_destino = request.data.get('email_destino', '').strip()
 
         if not cliente_id or not email_destino:
             return Response({'error': 'cliente_id y email_destino son requeridos.'}, status=400)
+
+        try:
+            validate_email(email_destino)
+        except DjangoValidationError:
+            return Response({'error': 'El email de destino no tiene un formato válido.'}, status=400)
 
         try:
             cliente = Cliente.objects.get(id=cliente_id)
@@ -349,36 +408,41 @@ class CaracterizacionPublicaView(APIView):
     def post(self, request, token):
         from apps.clientes.models import AccesoTemporalCaracterizacion
         from django.utils import timezone
+        from django.db import transaction
         try:
-            acceso = AccesoTemporalCaracterizacion.objects.select_related('cliente').get(token=token)
+            with transaction.atomic():
+                acceso = AccesoTemporalCaracterizacion.objects.select_for_update().select_related('cliente').get(token=token)
+                if not acceso.esta_vigente:
+                    return Response({'error': 'Este enlace ha expirado o ya fue utilizado.'}, status=410)
+
+                cliente = acceso.cliente
+                campos_permitidos = [
+                    'objeto_social', 'codigo_ciiu', 'num_empleados', 'tamano',
+                    'declaracion_necesidad', 'motivo_auditoria', 'urgencia',
+                    'fecha_limite_deseada', 'alcance_descripcion', 'normas_interes',
+                    'tiene_certificacion_previa', 'certificacion_previa_detalle',
+                    'sedes_adicionales',
+                    'rep_legal_nombre', 'rep_legal_documento', 'rep_legal_tipo_doc',
+                    'rep_legal_cargo', 'rep_legal_email', 'rep_legal_telefono',
+                    'telefono', 'telefono_alt', 'sitio_web', 'direccion_principal',
+                    'departamento', 'codigo_postal',
+                ]
+                for campo in campos_permitidos:
+                    if campo in request.data:
+                        setattr(cliente, campo, request.data[campo])
+
+                cliente.caracterizacion_completada = True
+                cliente.fecha_caracterizacion      = timezone.now()
+                cliente.estado = 'EN_EVALUACION'
+                cliente.save()
+
+                ip = (
+                    request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+                    or request.META.get('REMOTE_ADDR')
+                )
+                acceso.usar(ip=ip)
         except AccesoTemporalCaracterizacion.DoesNotExist:
             return Response({'error': 'Enlace inválido.'}, status=404)
-        if not acceso.esta_vigente:
-            return Response({'error': 'Este enlace ha expirado o ya fue utilizado.'}, status=410)
-
-        cliente = acceso.cliente
-        campos_permitidos = [
-            'objeto_social', 'codigo_ciiu', 'num_empleados', 'tamano',
-            'declaracion_necesidad', 'motivo_auditoria', 'urgencia',
-            'fecha_limite_deseada', 'alcance_descripcion', 'normas_interes',
-            'tiene_certificacion_previa', 'certificacion_previa_detalle',
-            'sedes_adicionales',
-            'rep_legal_nombre', 'rep_legal_documento', 'rep_legal_tipo_doc',
-            'rep_legal_cargo', 'rep_legal_email', 'rep_legal_telefono',
-            'telefono', 'telefono_alt', 'sitio_web', 'direccion_principal',
-            'departamento', 'codigo_postal',
-        ]
-        for campo in campos_permitidos:
-            if campo in request.data:
-                setattr(cliente, campo, request.data[campo])
-
-        cliente.caracterizacion_completada = True
-        cliente.fecha_caracterizacion      = timezone.now()
-        cliente.estado = 'EN_EVALUACION'
-        cliente.save()
-
-        ip = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip() or              request.META.get('REMOTE_ADDR')
-        acceso.usar(ip=ip)
 
         return Response({'detail': 'Caracterización enviada correctamente. El equipo se pondrá en contacto.'})
 
@@ -417,7 +481,9 @@ class EsquemaFormularioViewSet(viewsets.ModelViewSet):
             qs = qs.filter(tipo_auditoria_id=tipo)
         if contexto:
             qs = qs.filter(contexto=contexto)
-        if self.request.user.rol == 'SUPERVISOR':
+        user = self.request.user
+        rol = getattr(user, 'rol', None) if user and user.is_authenticated else None
+        if rol == 'SUPERVISOR':
             return qs.all()
         return qs.filter(activo=True)
 
@@ -474,26 +540,32 @@ class EsquemaFormularioViewSet(viewsets.ModelViewSet):
                 creado_por=request.user,
                 activo=False,
             )
-            analizar_formulario_bot.delay(
-                esquema_id=str(esquema.id),
-                ruta_archivo=tmp_path,
-                mime_type=mime,
-                origen=origen,
-            )
+            try:
+                analizar_formulario_bot.delay(
+                    esquema_id=str(esquema.id),
+                    ruta_archivo=tmp_path,
+                    mime_type=mime,
+                    origen=origen,
+                )
+            except _BROKER_ERRORS as broker_exc:
+                esquema.delete()
+                os.remove(tmp_path)
+                return Response({'error': _MSG_BROKER_NO_DISPONIBLE}, status=503)
             return Response({
                 'detail': 'Formulario en procesamiento. El bot extraerá los campos automáticamente.',
                 'esquema_id': str(esquema.id),
                 'estado': 'PROCESANDO',
             }, status=202)
         except Exception as e:
-            os.remove(tmp_path)
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
             return Response({'error': f'Error al procesar el formulario: {e}'}, status=500)
 
 
 class ValorFormularioViewSet(viewsets.ModelViewSet):
     queryset         = ValorFormulario.objects.all()
     serializer_class = ValorFormularioSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsPersonalInterno]
 
     def perform_create(self, serializer):
         serializer.save(creado_por=self.request.user)
@@ -503,8 +575,7 @@ class ExpedienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
     def _soft_delete(self, instance):
         if instance.estado in ('COMPLETADO', 'CANCELADO'):
-            from rest_framework.exceptions import ValidationError
-            raise ValidationError({"detail": f'El expediente ya está {instance.get_estado_display()}.'} )
+            raise ValidationError({"detail": f'El expediente ya está {instance.get_estado_display()}.'})
         instance.estado = 'CANCELADO'
         instance.save(update_fields=['estado'])
         BitacoraExpediente.registrar(
@@ -538,8 +609,14 @@ class ExpedienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         if user.rol in ('SUPERVISOR', 'ASESOR', 'REVISOR'):
             return qs.all()
         if user.rol == 'CLIENTE':
-            from apps.expedientes.models import Expediente as Exp
-            return qs.filter(cliente__contactos__usuario__email=user.email).distinct()
+            # ContactoCliente.usuario → UsuarioCliente (NOT UsuarioInterno).
+            # La cadena correcta para llegar al email del contacto del cliente es:
+            # cliente__contactos__email (email directo del ContactoCliente), o bien
+            # verificar si existe un UsuarioCliente cuyo contacto pertenece al cliente.
+            # Aquí comparamos contra el email del ContactoCliente directamente.
+            return qs.filter(
+                cliente__contactos__email__iexact=user.email
+            ).distinct()
         return qs.filter(
             Q(auditor_lider=user) | Q(equipo__usuario=user)
         ).distinct()
@@ -786,11 +863,15 @@ class EvidenciaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Evidencia.objects.select_related('expediente', 'hallazgo', 'subido_por').all()
 
     def _soft_delete(self, instance):
-        # Evidencias: marcamos con nombre prefijado [ELIMINADA] — son trazabilidad
-        # No hay campo estado en Evidencia, usamos nombre como marca
+        # Evidencias: son trazabilidad auditada, no se eliminan físicamente.
+        # Marcamos con prefijo [INACTIVA] para filtrado lógico y ponemos nombre idempotente.
         if not instance.nombre.startswith('[INACTIVA]'):
             instance.nombre = '[INACTIVA] ' + instance.nombre
             instance.save(update_fields=['nombre'])
+        # También limpiar descripción para señalizar el estado
+        if not instance.descripcion.startswith('[INACTIVA]'):
+            instance.descripcion = '[INACTIVA] ' + instance.descripcion
+            instance.save(update_fields=['nombre', 'descripcion'])
     serializer_class   = EvidenciaSerializer
     permission_classes = [IsAuditTeam]
     filterset_fields   = ['expediente', 'hallazgo']
@@ -798,7 +879,6 @@ class EvidenciaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         archivo = self.request.FILES.get('archivo')
         if not archivo:
-            from rest_framework.exceptions import ValidationError
             raise ValidationError({'archivo': 'Se requiere un archivo adjunto para crear una evidencia.'})
         evidencia = serializer.save(
             subido_por=self.request.user,
@@ -817,17 +897,60 @@ class EvidenciaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
 class ChecklistEjecucionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     def _soft_delete(self, instance):
-        instance.estado = 'OMITIDO'
+        # 'OMITIDO' no es un valor válido en ESTADO_CHOICES de ChecklistEjecucion.
+        # Los valores válidos son: PENDIENTE, CUMPLE, NO_CUMPLE, NO_APLICA.
+        # Usar NO_APLICA como equivalente semántico de "no se aplica / fue omitido".
+        instance.estado = 'NO_APLICA'
         instance.save(update_fields=['estado'])
 
-    queryset = ChecklistEjecucion.objects.select_related(
-        'item', 'verificado_por', 'expediente'
-    ).all()
     serializer_class   = ChecklistEjecucionSerializer
     permission_classes = [IsAuditTeam]
     filterset_fields   = ['expediente', 'estado']
 
+    def get_queryset(self):
+        if getattr(self, 'swagger_fake_view', False):
+            return ChecklistEjecucion.objects.none()
+
+        qs = ChecklistEjecucion.objects.select_related(
+            'item', 'verificado_por', 'expediente'
+        )
+
+        # Requerir filtro por expediente para evitar devolver todos los ítems
+        # de todos los expedientes a cualquier usuario autenticado.
+        expediente_id = self.request.query_params.get('expediente')
+        if expediente_id:
+            qs = qs.filter(expediente_id=expediente_id)
+        elif self.action == 'list':
+            # Sin filtro de expediente en list → devolver vacío en lugar de todo
+            return ChecklistEjecucion.objects.none()
+
+        # Filtrar por permisos del usuario (igual que ExpedienteViewSet)
+        user = self.request.user
+        rol  = getattr(user, 'rol', None)
+        if rol == 'SUPERVISOR':
+            return qs
+        # AUDITOR: solo ítems de expedientes donde participa
+        return qs.filter(
+            Q(expediente__auditor_lider=user) |
+            Q(expediente__equipo__usuario=user)
+        ).distinct()
+
     def perform_update(self, serializer):
+        # Sin esto, verificado_por y fecha_verificacion permanecían NULL siempre,
+        # haciendo imposible rastrear quién completó cada ítem del checklist.
+        from django.utils import timezone
+        estado_nuevo = serializer.validated_data.get('estado', serializer.instance.estado)
+        if estado_nuevo != 'PENDIENTE':
+            serializer.save(
+                verificado_por=self.request.user,
+                fecha_verificacion=timezone.now(),
+            )
+        else:
+            # Si se revierte a PENDIENTE, limpiar la verificación
+            serializer.save(
+                verificado_por=None,
+                fecha_verificacion=None,
+            )
         # Sin esto, verificado_por y fecha_verificacion permanecían NULL siempre,
         # haciendo imposible rastrear quién completó cada ítem del checklist.
         from django.utils import timezone
@@ -908,6 +1031,15 @@ class CertificacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         return [IsAdminOrLider()]
 
     def perform_create(self, serializer):
+        expediente = serializer.validated_data.get('expediente')
+        cliente    = serializer.validated_data.get('cliente')
+        if expediente and cliente and str(expediente.cliente_id) != str(cliente.id):
+            raise ValidationError({
+                'expediente': (
+                    'El expediente no pertenece al cliente indicado. '
+                    'Asegúrate de que expediente y cliente correspondan al mismo contrato.'
+                )
+            })
         serializer.save(emitido_por=self.request.user)
 
     @action(detail=False, methods=['get'], permission_classes=[AllowAny], url_path='verificar')
@@ -1134,7 +1266,7 @@ class ChatbotStatusView(APIView):
         import requests as req
         from django.conf import settings
         modelo   = getattr(settings, 'OLLAMA_MODEL',    'llama3.1:8b')
-        base_url = getattr(settings, 'OLLAMA_BASE_URL', getattr(settings, 'OLLAMA_BASE_URL', 'https://santiagoherazo.ddns.net:11435'))
+        base_url = getattr(settings, 'OLLAMA_BASE_URL', 'http://localhost:11434')
 
         disponible   = False
         modelo_listo = False
@@ -1158,7 +1290,7 @@ class ChatbotStatusView(APIView):
             'ollama_activo':     disponible,
             'modelo_descargado': modelo_listo,
             'modelo':            modelo,
-            'base_url':          base_url,
+            # No exponer la URL interna del servidor Ollama al frontend
             'mensaje': (
                 'Listo' if (disponible and modelo_listo) else
                 ('Descargando modelo...' if disponible else 'Ollama no disponible')
@@ -1209,10 +1341,10 @@ class DashboardGlobalView(APIView):
         rol  = getattr(user, 'rol', None)
 
         # Expedientes visibles según rol
-        if rol in ('SUPERVISOR', 'ASESOR'):
+        if rol in ('SUPERVISOR', 'ASESOR', 'REVISOR'):
             exp_qs = Expediente.objects.all()
         else:
-            # AUDITOR_LIDER y AUDITOR: solo sus expedientes asignados
+            # AUDITOR y AUXILIAR: solo sus expedientes asignados
             exp_qs = Expediente.objects.filter(
                 Q(auditor_lider=user) | Q(equipo__usuario=user)
             ).distinct()
@@ -1490,7 +1622,10 @@ class AnalizarDocumentoChatbotView(APIView):
         trace_id  = _new_trace_id()
         _op_id    = new_op_id()
         _user_str = getattr(usuario, 'email', str(usuario))
-        _ip_str   = request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()                     or request.META.get('REMOTE_ADDR', '?')
+        _ip_str = (
+            request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+            or request.META.get('REMOTE_ADDR', '?')
+        )
 
         log_doc_upload(
             nombre=nombre, mime_type=mime_type, size_bytes=archivo.size,

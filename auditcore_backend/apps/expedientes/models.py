@@ -34,11 +34,10 @@ class Expediente(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.numero_expediente:
-            # Generar número de expediente de forma segura.
-            # NO usamos select_for_update sobre fecha_creacion porque ese campo
-            # aún no existe cuando el objeto es nuevo (auto_now_add, pre-INSERT).
-            # Usamos MAX sobre el string numero_expediente — funciona correctamente
-            # antes del INSERT y dentro de un atomic block evita duplicados.
+            # Generar número de expediente de forma atómica y segura.
+            # select_for_update() aplica FOR UPDATE en el SELECT de MAX,
+            # lo que hace un row-level lock en PostgreSQL y previene que dos
+            # inserts concurrentes lean el mismo MAX y generen números duplicados.
             with transaction.atomic():
                 from django.utils import timezone
                 from django.db.models import Max
@@ -46,6 +45,7 @@ class Expediente(models.Model):
                 prefix = f'EXP-{year}-'
                 last = (
                     Expediente.objects
+                    .select_for_update()
                     .filter(numero_expediente__startswith=prefix)
                     .aggregate(last=Max('numero_expediente'))['last']
                 )
@@ -217,5 +217,8 @@ class VisitaAgendada(models.Model):
 
     @property
     def duracion_horas(self):
+        if not self.fecha_fin or not self.fecha_inicio:
+            return 0.0
         delta = self.fecha_fin - self.fecha_inicio
-        return round(delta.total_seconds() / 3600, 1)
+        horas = round(delta.total_seconds() / 3600, 1)
+        return max(horas, 0.0)  # nunca negativo

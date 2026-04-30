@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api/api_client.dart';
@@ -6,6 +7,14 @@ import '../../core/api/endpoints.dart';
 import '../../core/services/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/widgets.dart';
+
+// Provider de tipos de auditoría para certificaciones (top-level, no inline en build)
+final _tiposCertProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
+  final resp = await ApiClient.instance.get(Endpoints.tiposAuditoria);
+  final data = resp.data;
+  final lista = data is Map ? (data['results'] as List? ?? []) : (data as List? ?? []);
+  return lista.cast<Map<String, dynamic>>();
+});
 
 /// FIX Bug 7: pantalla de creación de certificaciones.
 /// Antes no existía ninguna forma de emitir certificaciones desde la app —
@@ -72,9 +81,17 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Certificación emitida correctamente.')));
       }
+    } on DioException catch (e) {
+      if (mounted) {
+        final msg = _parsearErrorDio(e);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(msg),
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 6)));
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text('Error: $e'), backgroundColor: AppColors.danger));
+          content: Text(e.toString()), backgroundColor: AppColors.danger));
     } finally {
       if (mounted) setState(() => _guardando = false);
     }
@@ -85,13 +102,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
     final authState      = ref.watch(authProvider);
     final usuario        = authState.valueOrNull;
     final clientesAsync  = ref.watch(clientesProvider);
-    final tiposAsync     = ref.watch(
-        FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-      final resp = await ApiClient.instance.get(Endpoints.tiposAuditoria);
-      final data = resp.data;
-      final lista = data is Map ? (data['results'] as List? ?? []) : (data as List? ?? []);
-      return lista.cast<Map<String, dynamic>>();
-    }));
+    final tiposAsync     = ref.watch(_tiposCertProvider);
     final expedientesAsync = ref.watch(expedientesProvider);
 
     return AppShell(
@@ -286,6 +297,24 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
         ),
       ),
     );
+  }
+
+  String _parsearErrorDio(DioException e) {
+    try {
+      final data = e.response?.data;
+      if (data is Map) {
+        final msgs = <String>[];
+        data.forEach((k, v) {
+          if (v is List) msgs.add('$k: \${v.join(", ")}');
+          else if (v is String) msgs.add(v);
+        });
+        if (msgs.isNotEmpty) return msgs.join('\n');
+      }
+      if (data is String && data.isNotEmpty) return data;
+      return 'Error ${e.response?.statusCode ?? "desconocido"}';
+    } catch (_) {
+      return e.message ?? 'Error desconocido';
+    }
   }
 
   Widget _label(String texto) => Text(

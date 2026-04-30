@@ -30,7 +30,7 @@ echo "      PostgreSQL listo."
 echo "[2/6] Esperando a RabbitMQ (conexión AMQP al vhost)..."
 until python -c "
 import os, sys
-url = os.environ.get('RABBITMQ_URL', 'amqp://auditcore:auditcore2026@rabbitmq:5672/auditcore?heartbeat=120')
+url = os.environ.get('RABBITMQ_URL', 'amqp://auditcore:${RABBITMQ_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@rabbitmq:5672/auditcore?heartbeat=120')
 try:
     from kombu import Connection
     with Connection(url, connect_timeout=5) as conn:

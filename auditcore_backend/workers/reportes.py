@@ -296,7 +296,7 @@ def _excel_clientes(ws, filtros, hf, hfill, ha, border, lgray):
         ws.append([
             c.razon_social, c.nit, c.get_sector_display(),
             c.ciudad, c.get_estado_display(),
-            c.email, c.telefono, c.representante_legal,
+            c.email, c.telefono, c.rep_legal_nombre,
         ])
     for col in ws.columns:
         ws.column_dimensions[col[0].column_letter].width = 22

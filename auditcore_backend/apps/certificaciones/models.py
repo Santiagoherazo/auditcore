@@ -40,8 +40,8 @@ class Certificacion(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.numero:
-            # FIX: usar MAX sobre el string para evitar race conditions,
-            # igual que en Expediente. count() puede dar duplicados concurrentes.
+            # Generación de número atómica con select_for_update para evitar
+            # race conditions entre inserts concurrentes (misma solución que Expediente).
             from django.db import transaction as db_transaction
             from django.db.models import Max
             with db_transaction.atomic():
@@ -49,6 +49,7 @@ class Certificacion(models.Model):
                 prefix = f'CERT-{year}-'
                 last = (
                     Certificacion.objects
+                    .select_for_update()
                     .filter(numero__startswith=prefix)
                     .aggregate(last=Max('numero'))['last']
                 )

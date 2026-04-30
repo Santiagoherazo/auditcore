@@ -110,15 +110,20 @@ class ApiClient {
 
   static String get baseUrl {
     if (_customBaseUrl != null) return _customBaseUrl!;
-    // FIX: en web SIEMPRE usar '' para que Dio use rutas relativas al origen del browser.
-    // Si el .env tiene 10.0.2.2 (compilado para Android), Dio intentaría llamar
-    // a esa IP desde el browser donde no existe → todas las peticiones fallan.
-    // Con '' vacío, Dio construye '/api/' relativo → Nginx lo proxea a backend:8000.
-    if (kIsWeb) return '';
+
+    if (kIsWeb) {
+      // En web SIEMPRE usar rutas relativas al origen del browser.
+      // Esto funciona tanto en desarrollo (localhost:3000 con Nginx)
+      // como en producción (cualquier dominio con Nginx).
+      // Si se corre con 'flutter run -d chrome' sin Nginx (puerto != 3000),
+      // los requests irán a ese puerto sin proxy → error de conexión.
+      // Solución: siempre servir la app desde Nginx (docker-compose up).
+      return '';
+    }
+
     final envUrl = _env('API_BASE_URL', '');
     if (envUrl.isNotEmpty) return envUrl;
-    // Fallback móvil/desktop sin .env: apunta directo al Django (sin Nginx).
-    // Con Docker siempre usar el .env con localhost:3000 (Nginx).
+    // Fallback móvil/desktop sin .env
     return 'http://localhost:8000';
   }
 

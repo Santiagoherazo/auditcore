@@ -115,23 +115,32 @@ def crear_estructura_expediente(sender, instance, created, **kwargs):
 
     # FIX: todos los efectos secundarios post-creación van en on_commit.
     # Si Redis/Channels/bitácora fallan, NO propagan el error al HTTP 201.
+    # FIX B4: NO capturar 'instance' (objeto ORM) en el closure — puede haber
+    # sido garbage-collected o su estado cambiado antes de que on_commit ejecute.
+    # En su lugar capturamos el pk y re-fetcheamos el objeto dentro del closure.
     try:
         from django.db import transaction as db_transaction
-        _exp_id     = str(instance.pk)
-        _uid        = str(instance.auditor_lider_id) if getattr(instance, 'auditor_lider_id', None) else None
-        _fases_n    = fases_count
-        _tipo_n     = tipo_nombre
+        _exp_pk  = instance.pk
+        _exp_id  = str(instance.pk)
+        _uid     = str(instance.auditor_lider_id) if getattr(instance, 'auditor_lider_id', None) else None
+        _fases_n = fases_count
+        _tipo_n  = tipo_nombre
 
         def _post_commit():
-            BitacoraExpediente_registrar(
-                expediente=instance,
-                accion='EXPEDIENTE_CREADO',
-                descripcion=(
-                    f'Expediente creado. '
-                    f'Se generaron {_fases_n} fases automáticamente '
-                    f'según el tipo de auditoría "{_tipo_n}".'
-                ),
-            )
+            try:
+                from apps.expedientes.models import Expediente as Exp
+                exp_obj = Exp.objects.get(pk=_exp_pk)
+                BitacoraExpediente_registrar(
+                    expediente=exp_obj,
+                    accion='EXPEDIENTE_CREADO',
+                    descripcion=(
+                        f'Expediente creado. '
+                        f'Se generaron {_fases_n} fases automáticamente '
+                        f'según el tipo de auditoría "{_tipo_n}".'
+                    ),
+                )
+            except Exception as e:
+                logger.error('_post_commit bitácora: %s', e)
             _broadcast_dashboard()
             _invalidar_cache_expediente(_exp_id, _uid)
 

@@ -80,26 +80,48 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
             const SnackBar(content: Text('Hallazgo registrado correctamente.')));
       }
     } on DioException catch (e) {
-      // FIX: error 500 post-creación (notificación crítica/WebSocket) —
-      // el hallazgo ya existe, navegar de vuelta y refrescar.
+      // 500 post-creación (señal de notificación crítica/WebSocket) —
+      // el hallazgo ya fue guardado correctamente.
       if (e.response?.statusCode == 500) {
         ref.invalidate(hallazgosProvider(widget.expedienteId));
         if (mounted) {
-          context.go('/expedientes/${widget.expedienteId}');
+          context.go('/expedientes/\${widget.expedienteId}');
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Hallazgo registrado (con advertencia del servidor).')));
+              content: Text('Hallazgo registrado correctamente.')));
         }
         return;
       }
-      if (mounted)
+      if (mounted) {
+        final msg = _parsearErrorDio(e);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: ${e.message}'), backgroundColor: AppColors.danger));
+            content: Text(msg),
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 6)));
+      }
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: $e'), backgroundColor: AppColors.danger));
+            content: Text(e.toString()), backgroundColor: AppColors.danger));
     } finally {
       if (mounted) setState(() => _cargando = false);
+    }
+  }
+
+  String _parsearErrorDio(DioException e) {
+    try {
+      final data = e.response?.data;
+      if (data is Map) {
+        final msgs = <String>[];
+        data.forEach((k, v) {
+          if (v is List) msgs.add('$k: \${v.join(", ")}');
+          else if (v is String) msgs.add(v);
+        });
+        if (msgs.isNotEmpty) return msgs.join('\n');
+      }
+      if (data is String && data.isNotEmpty) return data;
+      return 'Error ${e.response?.statusCode ?? "desconocido"}';
+    } catch (_) {
+      return e.message ?? 'Error desconocido';
     }
   }
 

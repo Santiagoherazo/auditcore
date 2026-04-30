@@ -14,7 +14,7 @@ echo "  [IDS] Logs en /app/logs/chatbot_ids.log"
 echo "[1/2] Esperando a RabbitMQ..."
 until python -c "
 import os, sys
-url = os.environ.get('RABBITMQ_URL', 'amqp://auditcore:auditcore2026@rabbitmq:5672/auditcore?heartbeat=120')
+url = os.environ.get('RABBITMQ_URL', 'amqp://auditcore:${RABBITMQ_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@rabbitmq:5672/auditcore?heartbeat=120')
 try:
     from kombu import Connection
     with Connection(url, connect_timeout=5) as conn:

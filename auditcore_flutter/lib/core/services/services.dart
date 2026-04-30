@@ -84,6 +84,18 @@ class ClientesService {
     return ClienteModel.fromJson(resp.data as Map<String, dynamic>);
   }
 
+  /// Cambia el estado del cliente a través del endpoint controlado /cambiar-estado/.
+  /// El campo 'estado' es read_only en el serializer estándar para evitar
+  /// que ediciones normales reseten el estado accidentalmente.
+  Future<Map<String, dynamic>> cambiarEstado(
+      String id, String nuevoEstado, {String motivo = ''}) async {
+    final resp = await _dio.post(
+      Endpoints.clienteCambiarEstado(id),
+      data: {'estado': nuevoEstado, if (motivo.isNotEmpty) 'motivo': motivo},
+    );
+    return resp.data as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> dashboard(String id) async {
     final resp = await _dio.get(Endpoints.clienteDashboard(id));
     return resp.data as Map<String, dynamic>;

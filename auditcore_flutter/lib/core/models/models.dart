@@ -260,7 +260,7 @@ class CertificacionModel {
   final String fechaEmision;
   final String fechaVencimiento;
   final String estado;
-  final int diasParaVencer;
+  final int? diasParaVencer;  // null cuando fecha_vencimiento es nula en el backend
   final String? certificadoPdf;
 
   const CertificacionModel({
@@ -272,7 +272,7 @@ class CertificacionModel {
     required this.fechaEmision,
     required this.fechaVencimiento,
     required this.estado,
-    required this.diasParaVencer,
+    this.diasParaVencer,
     this.certificadoPdf,
   });
 
@@ -285,7 +285,7 @@ class CertificacionModel {
         fechaEmision:        j['fecha_emision'] ?? '',
         fechaVencimiento:    j['fecha_vencimiento'] ?? '',
         estado:              j['estado'] ?? '',
-        diasParaVencer:      j['dias_para_vencer'] ?? 0,
+        diasParaVencer:      j['dias_para_vencer'] as int?,
         certificadoPdf:      j['certificado_pdf']?.toString(),
       );
 }

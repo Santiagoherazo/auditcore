@@ -191,6 +191,7 @@ class ClienteSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id', 'fecha_creacion', 'fecha_actualizacion',
             'caracterizacion_completada', 'fecha_caracterizacion',
+            'estado',  # El estado se cambia solo a través de flujos controlados (acciones específicas)
         ]
 
     @extend_schema_field(serializers.CharField(allow_null=True))
@@ -374,7 +375,10 @@ class EvidenciaSerializer(serializers.ModelSerializer):
             'tipo_archivo', 'tamanio_bytes', 'hash_sha256',
             'descripcion', 'subido_por', 'fecha_subida',
         ]
-        read_only_fields = ['id', 'hash_sha256', 'fecha_subida', 'nombre_original', 'tipo_archivo', 'tamanio_bytes']
+        read_only_fields = [
+            'id', 'hash_sha256', 'fecha_subida', 'nombre_original',
+            'tipo_archivo', 'tamanio_bytes', 'subido_por',
+        ]
 
 
 class ChecklistEjecucionSerializer(serializers.ModelSerializer):
@@ -401,7 +405,10 @@ class DocumentoExpedienteSerializer(serializers.ModelSerializer):
             'revisado_por_nombre', 'fecha_revision',
             'observacion_revision', 'subido_por', 'fecha_subida',
         ]
-        read_only_fields = ['id', 'hash_sha256', 'version', 'fecha_subida']
+        read_only_fields = [
+            'id', 'hash_sha256', 'version', 'fecha_subida',
+            'subido_por', 'revisado_por', 'fecha_revision',
+        ]
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_revisado_por_nombre(self, obj) -> Optional[str]:
@@ -425,7 +432,7 @@ class CertificacionSerializer(serializers.ModelSerializer):
             'fecha_vencimiento', 'estado', 'certificado_pdf',
             'emitido_por', 'dias_para_vencer',
         ]
-        read_only_fields = ['id', 'numero', 'codigo_verificacion', 'dias_para_vencer']
+        read_only_fields = ['id', 'numero', 'codigo_verificacion', 'dias_para_vencer', 'emitido_por']
 
     def validate(self, data):
         emision     = data.get('fecha_emision')
@@ -454,7 +461,7 @@ class ConversacionSerializer(serializers.ModelSerializer):
 class VisitaAgendadaSerializer(serializers.ModelSerializer):
     creado_por_nombre  = serializers.CharField(source='creado_por.nombre_completo', read_only=True)
     expediente_numero  = serializers.CharField(source='expediente.numero_expediente', read_only=True)
-    fase_nombre        = serializers.CharField(source='fase.fase_tipo.nombre', read_only=True)
+    fase_nombre        = serializers.SerializerMethodField()
     participantes_data = UsuarioInternoSerializer(source='participantes', many=True, read_only=True)
     duracion_horas     = serializers.FloatField(read_only=True)
 
@@ -468,3 +475,19 @@ class VisitaAgendadaSerializer(serializers.ModelSerializer):
             'duracion_horas', 'fecha_creacion',
         ]
         read_only_fields = ['id', 'creado_por', 'fecha_creacion']
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_fase_nombre(self, obj) -> Optional[str]:
+        # fase es FK nullable — traversar de forma segura
+        if obj.fase and obj.fase.fase_tipo:
+            return obj.fase.fase_tipo.nombre
+        return None
+
+    def validate(self, data):
+        fecha_inicio = data.get('fecha_inicio')
+        fecha_fin    = data.get('fecha_fin')
+        if fecha_inicio and fecha_fin and fecha_fin <= fecha_inicio:
+            raise serializers.ValidationError({
+                'fecha_fin': 'La fecha de fin debe ser posterior a la fecha de inicio.'
+            })
+        return data

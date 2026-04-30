@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:dio/dio.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/endpoints.dart';
 import '../../core/services/providers.dart';
@@ -18,7 +19,8 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   final _pageCtrl = PageController();
   int  _paso      = 0;
   bool _cargando  = false;
-  String? _clienteIdCreado;
+  String? _draftId;          // ID del borrador en Redis (null = aún no creado)
+  String? _clienteIdCreado; // ID del Cliente en PostgreSQL (solo tras commit)
 
   // Paso 1 — Perfil legal
   final _razonCtrl          = TextEditingController();
@@ -103,51 +105,182 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
+  // ── Parseo de errores DRF ─────────────────────────────────────────────────
+  String _parsearErrorDRF(dynamic e) {
+    if (e is DioException) {
+      final resp = e.response;
+      if (resp == null) {
+        // Error de red: sin respuesta del servidor
+        return 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
+      }
+      final data = resp.data;
+      if (data is Map) {
+        final msgs = <String>[];
+        // 'detail' y 'non_field_errors' van primero — son el mensaje principal
+        if (data.containsKey('detail')) {
+          msgs.add(data['detail'].toString());
+        } else if (data.containsKey('non_field_errors')) {
+          final v = data['non_field_errors'];
+          msgs.add(v is List ? (v as List).join(', ') : v.toString());
+        }
+        // Errores de campo específicos
+        data.forEach((key, val) {
+          if (key == 'detail' || key == 'non_field_errors') return;
+          if (val is List) {
+            msgs.add('$key: ${(val as List).join(", ")}');
+          } else if (val is String) {
+            msgs.add('$key: $val');
+          }
+        });
+        if (msgs.isNotEmpty) return msgs.join('\n');
+      }
+      if (data is String && data.isNotEmpty) return data;
+      // Códigos HTTP conocidos sin body útil
+      switch (resp.statusCode) {
+        case 403: return 'No tienes permisos para realizar esta acción. Contacta al administrador.';
+        case 401: return 'Sesión expirada. Por favor vuelve a iniciar sesión.';
+        case 404: return 'El recurso solicitado no existe.';
+        case 500: return 'Error interno del servidor. Intenta de nuevo en unos momentos.';
+        default:  return 'Error ${resp.statusCode}: ${resp.statusMessage ?? "desconocido"}';
+      }
+    }
+    return e.toString();
+  }
+
+  // ── Flujo de borrador Redis → PostgreSQL ───────────────────────────────────
+  //
+  // Cada "Siguiente" acumula datos en Redis sin tocar PostgreSQL.
+  // Solo el último paso hace el commit definitivo en la BD.
+  //
+  //  Paso 1    → POST  /api/clientes/draft/            → crea draft, guarda draft_id
+  //  Pasos 2-5 → PATCH /api/clientes/draft/{id}/       → merge parcial en Redis
+  //  Paso 6    → PATCH /api/clientes/draft/{id}/       → agrega contacto
+  //              POST  /api/clientes/draft/{id}/commit/ → persiste en PostgreSQL
+  //
+  // Si el usuario ya tenía un cliente (widget.clienteId != null → modo edición),
+  // el flujo original de PATCH directo a /api/clientes/{id}/ se mantiene intacto.
+
   Future<void> _guardarYAvanzar() async {
     if (_cargando) return;
     setState(() => _cargando = true);
     try {
-      final payload = _buildPayload();
-      if (widget.clienteId != null || _clienteIdCreado != null) {
-        final id = widget.clienteId ?? _clienteIdCreado!;
-        await ApiClient.instance.patch('${Endpoints.clientes}$id/', data: payload);
-      } else {
-        final resp = await ApiClient.instance.post(Endpoints.clientes, data: payload);
-        _clienteIdCreado = (resp.data as Map<String, dynamic>)['id']?.toString();
+      // ── Modo edición: PATCH directo al cliente existente ──────────────────
+      if (widget.clienteId != null) {
+        final payload = _buildPayload();
+        await ApiClient.instance.patch(
+          Endpoints.cliente(widget.clienteId!),
+          data: payload,
+        );
+        ref.invalidate(clientesProvider);
+        if (_paso < _pasos.length - 1) {
+          _irPaso(_paso + 1);
+        } else {
+          if (mounted) {
+            context.go('/clientes');
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Cliente actualizado correctamente.')));
+          }
+        }
+        return;
       }
-      ref.invalidate(clientesProvider);
+
+      // ── Modo creación: flujo draft Redis ──────────────────────────────────
+      final pasoActual = _buildPayload();
+
+      if (_paso == 0) {
+        // Paso 1 → crear draft en Redis
+        final resp = await ApiClient.instance.post(
+          Endpoints.clienteDraft,
+          data: pasoActual,
+        );
+        _draftId = (resp.data as Map<String, dynamic>)['draft_id']?.toString();
+        _irPaso(1);
+        return;
+      }
+
+      if (_draftId == null) {
+        // Seguridad: no debería pasar, pero si el draft expiró mostramos error
+        throw Exception('El borrador expiró. Por favor reinicia el formulario.');
+      }
+
       if (_paso < _pasos.length - 1) {
+        // Pasos 2–5: merge parcial en Redis
+        await ApiClient.instance.patch(
+          Endpoints.clienteDraftUpdate(_draftId!),
+          data: pasoActual,
+        );
         _irPaso(_paso + 1);
-      } else {
-        await _enviarAccesoCaracterizacion();
-        if (mounted) {
-          context.go('/clientes');
+        return;
+      }
+
+      // Paso final (6): merge del contacto + commit a PostgreSQL
+      // El payload del Paso 6 incluye los campos del contacto con prefijo 'contacto_'
+      final contactoPayload = _buildContactoPayload();
+      await ApiClient.instance.patch(
+        Endpoints.clienteDraftUpdate(_draftId!),
+        data: {...pasoActual, ...contactoPayload},
+      );
+
+      final commitResp = await ApiClient.instance.post(
+        Endpoints.clienteDraftCommit(_draftId!),
+      );
+      final commitData = commitResp.data as Map<String, dynamic>;
+      _clienteIdCreado = (commitData['cliente'] as Map<String, dynamic>?)?['id']?.toString();
+      final warnings   = (commitData['warnings'] as List?)?.cast<String>() ?? [];
+
+      ref.invalidate(clientesProvider);
+      if (mounted) {
+        context.go('/clientes');
+        if (warnings.isEmpty) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Cliente creado. Se enviará el formulario de caracterización.')));
+            const SnackBar(
+              content: Text('Cliente creado. Se enviará el formulario de caracterización.'),
+              duration: Duration(seconds: 4),
+            ));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Cliente creado con advertencias:\n${warnings.join("\n")}'),
+              backgroundColor: Colors.orange.shade700,
+              duration: const Duration(seconds: 8),
+            ));
         }
       }
+
     } catch (e) {
+      final msg = _parsearErrorDRF(e);
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.danger));
+        SnackBar(content: Text(msg), backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 6)));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
   }
 
-  Future<void> _enviarAccesoCaracterizacion() async {
-    final id    = widget.clienteId ?? _clienteIdCreado;
-    final email = _contactoEmailCtrl.text.trim().isEmpty
-        ? _emailCtrl.text.trim()
-        : _contactoEmailCtrl.text.trim();
-    if (id == null || email.isEmpty) return;
-    try {
-      await ApiClient.instance.post('clientes/acceso-temporal/', data: {
-        'cliente_id': id, 'email_destino': email,
-      });
-    } catch (_) {}
+  /// Construye el payload del contacto operativo (Paso 6) con prefijo 'contacto_'
+  /// para que el draft_service los separe al hacer commit.
+  Map<String, dynamic> _buildContactoPayload() {
+    final nombre = _contactoNombreCtrl.text.trim();
+    final email  = _contactoEmailCtrl.text.trim();
+    if (nombre.isEmpty || email.isEmpty) return {};
+    return {
+      'contacto_tipo':         _contactoTipo,
+      'contacto_nombre':       nombre,
+      'contacto_apellido':     _contactoApellidoCtrl.text.trim(),
+      'contacto_cargo':        _contactoCargoCtrl.text.trim(),
+      'contacto_departamento': _contactoDeptoCtrl.text.trim(),
+      'contacto_email':        email,
+      'contacto_telefono':     _contactoTelCtrl.text.trim(),
+    };
   }
 
+
+
   Map<String, dynamic> _buildPayload() {
+    // Solo campos que el serializer acepta explícitamente.
+    // NOTA: 'estado' se omite intencionalmente — es read_only en el backend
+    // y solo se puede cambiar a través del endpoint /cambiar-estado/.
+    // Enviarlo en PATCH sobreescribía el estado actual del cliente con 'PROSPECTO'.
     final raw = <String, dynamic>{
       'tipo_persona':    _tipoPersona,
       'razon_social':    _razonCtrl.text.trim(),
@@ -158,11 +291,12 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
       'urgencia':        _urgencia,
       'responsable_iva': _respIva,
       'tiene_certificacion_previa': _certPrevia,
-      'estado':          'PROSPECTO',
       'normas_interes':  _normasCtrl.text.trim().isEmpty
-          ? <String>[] : _normasCtrl.text.split(',').map((e) => e.trim()).toList(),
+          ? <String>[] : _normasCtrl.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
     };
 
+    // Campos opcionales — omitir si están vacíos para no provocar
+    // errores de validación en campos URLField/EmailField del serializer
     void addIfNotEmpty(String key, String value) {
       if (value.isNotEmpty) raw[key] = value;
     }
@@ -179,7 +313,9 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     addIfNotEmpty('rep_legal_documento',           _repDocCtrl.text.trim());
     addIfNotEmpty('rep_legal_tipo_doc',            _repTipoDoc);
     addIfNotEmpty('rep_legal_cargo',               _repCargoCtrl.text.trim());
-    addIfNotEmpty('rep_legal_email',               _repEmailCtrl.text.trim());
+    // EmailField/URLField: solo enviar si no está vacío
+    final repEmail = _repEmailCtrl.text.trim();
+    if (repEmail.isNotEmpty && repEmail.contains('@')) raw['rep_legal_email'] = repEmail;
     addIfNotEmpty('rep_legal_telefono',            _repTelCtrl.text.trim());
     addIfNotEmpty('pais',                          _paisCtrl.text.trim());
     addIfNotEmpty('departamento',                  _deptoCtrl.text.trim());
@@ -188,14 +324,26 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     addIfNotEmpty('codigo_postal',                 _cpCtrl.text.trim());
     addIfNotEmpty('telefono',                      _telCtrl.text.trim());
     addIfNotEmpty('telefono_alt',                  _tel2Ctrl.text.trim());
-    addIfNotEmpty('email',                         _emailCtrl.text.trim());
-    addIfNotEmpty('sitio_web',                     _webCtrl.text.trim());
+    // EmailField
+    final email = _emailCtrl.text.trim();
+    if (email.isNotEmpty && email.contains('@')) raw['email'] = email;
+    // URLField
+    final web = _webCtrl.text.trim();
+    if (web.isNotEmpty) {
+      final urlFinal = web.startsWith('http') ? web : 'https://$web';
+      raw['sitio_web'] = urlFinal;
+    }
     addIfNotEmpty('subsector',                     _subsectorCtrl.text.trim());
+    // ingresos_anuales es CharField en el modelo — enviar como string
     addIfNotEmpty('ingresos_anuales',              _ingresosCtrl.text.trim());
     addIfNotEmpty('alcance_descripcion',           _alcanceCtrl.text.trim());
     addIfNotEmpty('declaracion_necesidad',         _declaracionCtrl.text.trim());
     addIfNotEmpty('certificacion_previa_detalle',  _certPreviaDetalleCtrl.text.trim());
     addIfNotNull('num_empleados', int.tryParse(_empleadosCtrl.text.trim()));
+    // Fecha de constitución
+    if (_fechaConstitucion != null && _fechaConstitucion!.isNotEmpty) {
+      raw['fecha_constitucion'] = _fechaConstitucion;
+    }
 
     return raw;
   }
@@ -221,6 +369,8 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
               matriculaCtrl: _matriculaCtrl, objetoCtrl: _objetoCtrl, ciiuCtrl: _ciiuCtrl,
               regimenTrib: _regimenTrib, onRegimen: (v) => setState(() => _regimenTrib = v!),
               respIva: _respIva, onRespIva: (v) => setState(() => _respIva = v),
+              fechaConstitucion: _fechaConstitucion,
+              onFechaConstitucion: (v) => setState(() => _fechaConstitucion = v),
               onSiguiente: _guardarYAvanzar, cargando: _cargando,
             ),
             _PasoRepresentante(
@@ -374,6 +524,8 @@ class _PasoPerfil extends StatelessWidget {
   final void Function(String?) onRegimen;
   final bool respIva;
   final void Function(bool) onRespIva;
+  final String? fechaConstitucion;
+  final void Function(String?) onFechaConstitucion;
   final VoidCallback onSiguiente;
   final bool cargando;
   const _PasoPerfil({
@@ -382,6 +534,7 @@ class _PasoPerfil extends StatelessWidget {
     required this.matriculaCtrl, required this.objetoCtrl, required this.ciiuCtrl,
     required this.regimenTrib, required this.onRegimen,
     required this.respIva, required this.onRespIva,
+    required this.fechaConstitucion, required this.onFechaConstitucion,
     required this.onSiguiente, required this.cargando,
   });
 
@@ -415,6 +568,8 @@ class _PasoPerfil extends StatelessWidget {
                 _tf(digitoCtrl, hint: '0'))),
           ]),
           if (tipoPersona == 'JURIDICA') ...[
+            _campo('Fecha de constitución',
+                _DatePickerField(value: fechaConstitucion, onChanged: onFechaConstitucion)),
             _campo('Matrícula mercantil', _tf(matriculaCtrl, hint: 'No. de matrícula')),
             _campo('Objeto social / Actividad principal',
                 _tf(objetoCtrl, hint: 'Describe la actividad económica...', maxLines: 2)),
@@ -438,6 +593,64 @@ class _PasoPerfil extends StatelessWidget {
     ]));
 }
 
+// ── Date picker field ─────────────────────────────────────────────────────────
+class _DatePickerField extends StatelessWidget {
+  final String? value;
+  final void Function(String?) onChanged;
+  const _DatePickerField({this.value, required this.onChanged});
+
+  String _formatDisplay(String iso) {
+    try {
+      final parts = iso.split('-');
+      if (parts.length == 3) return '${parts[2]}/${parts[1]}/${parts[0]}';
+    } catch (_) {}
+    return iso;
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: () async {
+      final now = DateTime.now();
+      final initial = value != null
+          ? DateTime.tryParse(value!) ?? DateTime(now.year - 5)
+          : DateTime(now.year - 5);
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: initial,
+        firstDate: DateTime(1900),
+        lastDate: now,
+        helpText: 'Fecha de constitución',
+        cancelText: 'Cancelar',
+        confirmText: 'Aceptar',
+      );
+      if (picked != null) {
+        final iso =
+            '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+        onChanged(iso);
+      }
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        border: Border.all(color: AppColors.border),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        Expanded(child: Text(
+          value != null ? _formatDisplay(value!) : 'Seleccionar fecha',
+          style: TextStyle(
+            fontSize: 13,
+            color: value != null ? AppColors.textPrimary : AppColors.textTertiary),
+        )),
+        Icon(Icons.calendar_today_outlined, size: 16,
+            color: value != null ? AppColors.accent : AppColors.textTertiary),
+      ]),
+    ),
+  );
+}
+
+// ── Tipo chip ─────────────────────────────────────────────────────────────────
 class _TipoChip extends StatelessWidget {
   final String label;
   final bool selected;

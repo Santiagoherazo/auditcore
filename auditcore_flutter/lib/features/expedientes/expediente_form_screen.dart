@@ -21,14 +21,10 @@ final auditoresProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   // Usar endpoint /auditores/ que tiene permiso IsAuthenticated
   // /usuarios/ requiere IsAdmin y rompe para AUDITOR_LIDER
-  final resp = await ApiClient.instance.get('${Endpoints.usuarios}auditores/');
+  final resp = await ApiClient.instance.get('\${Endpoints.usuarios}auditores/');
   final data = resp.data;
   final lista = data is Map ? (data['results'] as List? ?? []) : (data as List? ?? []);
-  return (lista.cast<Map<String, dynamic>>())
-      .where((u) =>
-          ['SUPERVISOR', 'SUPERVISOR', 'AUDITOR', 'AUDITOR'].contains(u['rol']) &&
-          u['estado'] == 'ACTIVO')
-      .toList();
+  return lista.cast<Map<String, dynamic>>();
 });
 
 class ExpedienteFormScreen extends ConsumerStatefulWidget {
@@ -92,25 +88,27 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
             content: Text('Expediente creado. Fases y checklist generados automáticamente.')));
       }
     } on DioException catch (e) {
-      // (error en signals de bitácora/WebSocket), el expediente SÍ existe.
-      // Redirigimos igual y refrescamos la lista para evitar que el usuario
-      // reintente y genere un duplicado.
+      // 500 en señales de bitácora/WebSocket — expediente YA fue creado.
       if (e.response?.statusCode == 500) {
         ref.invalidate(expedientesProvider);
         if (mounted) {
           context.go('/expedientes');
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Expediente creado (con advertencia del servidor).')));
+              content: Text('Expediente creado correctamente.')));
         }
         return;
       }
-      if (mounted)
+      if (mounted) {
+        final msg = _parsearErrorDio(e);
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: ${e.message}'), backgroundColor: AppColors.danger));
+            content: Text(msg),
+            backgroundColor: AppColors.danger,
+            duration: const Duration(seconds: 6)));
+      }
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Error: $e'), backgroundColor: AppColors.danger));
+            content: Text(e.toString()), backgroundColor: AppColors.danger));
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -361,10 +359,29 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
       );
 
   String _rolLabel(String rol) => switch (rol) {
-        'SUPERVISOR'         => 'Admin',
-        'SUPERVISOR' => 'Líder',
-        'AUDITOR' => 'Auditor Interno',
-              'AUDITOR' => 'Auditor Externo',
-        _               => rol,
+        'SUPERVISOR' => 'Supervisor',
+        'ASESOR'     => 'Asesor',
+        'AUDITOR'    => 'Auditor',
+        'AUXILIAR'   => 'Auxiliar',
+        'REVISOR'    => 'Revisor',
+        _            => rol,
       };
+
+  String _parsearErrorDio(DioException e) {
+    try {
+      final data = e.response?.data;
+      if (data is Map) {
+        final msgs = <String>[];
+        data.forEach((k, v) {
+          if (v is List) msgs.add('$k: \${v.join(", ")}');
+          else if (v is String) msgs.add(v);
+        });
+        if (msgs.isNotEmpty) return msgs.join('\n');
+      }
+      if (data is String && data.isNotEmpty) return data;
+      return 'Error ${e.response?.statusCode ?? "desconocido"}';
+    } catch (_) {
+      return e.message ?? 'Error desconocido';
+    }
+  }
 }

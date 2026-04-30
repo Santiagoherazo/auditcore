@@ -2,6 +2,11 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView, TokenBlacklistView
 from adapters.api import views
+from adapters.api.views_draft import (
+    ClienteDraftCreateView,
+    ClienteDraftUpdateView,
+    ClienteDraftCommitView,
+)
 from apps.administracion.views_auth import (
     LoginView, MFASetupView,
     PasswordResetRequestView, PasswordResetConfirmView,
@@ -37,6 +42,11 @@ urlpatterns = [
     # Setup inicial — wizard de instalación (se bloquea tras el primer uso)
     path('auth/setup/',        SetupView.as_view(),       name='setup'),
     path('auth/setup/status/', SetupStatusView.as_view(), name='setup-status'),
+
+    # Draft de cliente (Redis → PostgreSQL) — formulario multi-paso
+    path('clientes/draft/',                  ClienteDraftCreateView.as_view(),  name='cliente-draft-create'),
+    path('clientes/draft/<str:draft_id>/',   ClienteDraftUpdateView.as_view(),  name='cliente-draft-update'),
+    path('clientes/draft/<str:draft_id>/commit/', ClienteDraftCommitView.as_view(), name='cliente-draft-commit'),
 
     # Router ViewSets
     path('', include(router.urls)),

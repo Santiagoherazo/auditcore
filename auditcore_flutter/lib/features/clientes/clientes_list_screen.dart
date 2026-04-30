@@ -41,6 +41,9 @@ class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
     final usuario   = authState.valueOrNull;
     final clientesAsync = ref.watch(clientesProvider);
 
+    // Solo SUPERVISOR y ASESOR pueden crear clientes (alineado con CanCreateClientes en backend)
+    final puedeCrearClientes = ['SUPERVISOR', 'ASESOR'].contains(usuario?.rol ?? '');
+
     return AppShell(
       rutaActual:    '/clientes',
       rolUsuario:    usuario?.rol ?? '',
@@ -48,14 +51,15 @@ class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
       titulo:        'Clientes',
       showBottomNav: true,
       actions: [
-        Padding(
-          padding: const EdgeInsets.only(right: 12),
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.add, size: 15),
-            label: const Text('Nuevo'),
-            onPressed: () => context.go('/clientes/nuevo'),
+        if (puedeCrearClientes)
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.add, size: 15),
+              label: const Text('Nuevo'),
+              onPressed: () => context.go('/clientes/nuevo'),
+            ),
           ),
-        ),
       ],
       child: Column(
         children: [
@@ -117,10 +121,14 @@ class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
               data: (clientes) => clientes.isEmpty
                   ? EmptyState(
                       titulo: 'Sin clientes',
-                      subtitulo: 'Crea el primer cliente para comenzar.',
+                      subtitulo: puedeCrearClientes
+                          ? 'Crea el primer cliente para comenzar.'
+                          : 'Aún no hay clientes registrados.',
                       icono: Icons.business_outlined,
-                      labelBoton: 'Nuevo cliente',
-                      onBoton: () => context.go('/clientes/nuevo'),
+                      labelBoton: puedeCrearClientes ? 'Nuevo cliente' : null,
+                      onBoton: puedeCrearClientes
+                          ? () => context.go('/clientes/nuevo')
+                          : null,
                     )
                   : ListView.separated(
                       padding: const EdgeInsets.all(14),

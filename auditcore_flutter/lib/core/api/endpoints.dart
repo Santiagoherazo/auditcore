@@ -11,8 +11,13 @@ class Endpoints {
 
   // Clientes
   static const clientes = 'clientes/';
-  static String cliente(String id)          => 'clientes/$id/';
-  static String clienteDashboard(String id) => 'clientes/$id/dashboard/';
+  // Draft (formulario multi-paso Redis → PostgreSQL)
+  static const clienteDraft              = 'clientes/draft/';
+  static String clienteDraftUpdate(String id)  => 'clientes/draft/$id/';
+  static String clienteDraftCommit(String id)  => 'clientes/draft/$id/commit/';
+  static String cliente(String id)             => 'clientes/$id/';
+  static String clienteDashboard(String id)    => 'clientes/$id/dashboard/';
+  static String clienteCambiarEstado(String id)=> 'clientes/$id/cambiar-estado/';
 
   // Tipos de auditoría
   static const tiposAuditoria = 'tipos-auditoria/';
@@ -54,7 +59,7 @@ class Endpoints {
 
   // Visitas agendadas
   static const visitas = 'visitas/';
-  static String visita(String id) => 'visitas/\$id/';
+  static String visita(String id) => 'visitas/$id/';
 
   // MFA
   static const mfaSetup = 'auth/mfa/';

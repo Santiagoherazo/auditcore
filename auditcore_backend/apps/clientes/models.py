@@ -164,7 +164,7 @@ class SedeCliente(models.Model):
     pais      = models.CharField(max_length=100, default='Colombia')
     departamento = models.CharField(max_length=100, blank=True)
     ciudad    = models.CharField(max_length=100, blank=True)
-    direccion = models.CharField(max_length=300)
+    direccion = models.CharField(max_length=300, blank=True)
     codigo_postal = models.CharField(max_length=10, blank=True)
     telefono  = models.CharField(max_length=20, blank=True)
     email_sede = models.EmailField(blank=True)

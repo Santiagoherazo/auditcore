@@ -113,16 +113,35 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/clientes', name: 'clientes',
         builder: (_, __) => const ClientesListScreen(),
         routes: [
-          GoRoute(path: 'nuevo', name: 'cliente-nuevo',
-              builder: (_, __) => const ClienteFormScreen()),
+          GoRoute(
+            path: 'nuevo', name: 'cliente-nuevo',
+            redirect: (context, state) {
+              final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
+              if (!['SUPERVISOR', 'ASESOR'].contains(rol)) {
+                return '/clientes'; // Redirigir al listado sin mensaje de error
+              }
+              return null;
+            },
+            builder: (_, __) => const ClienteFormScreen(),
+          ),
           GoRoute(
             path: ':id', name: 'cliente-detalle',
             builder: (_, state) =>
                 ClienteDetailScreen(id: state.pathParameters['id']!),
             routes: [
-              GoRoute(path: 'editar', name: 'cliente-editar',
-                  builder: (_, state) =>
-                      ClienteFormScreen(clienteId: state.pathParameters['id'])),
+              GoRoute(
+                path: 'editar', name: 'cliente-editar',
+                redirect: (context, state) {
+                  final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
+                  if (!['SUPERVISOR', 'ASESOR'].contains(rol)) {
+                    final id = state.pathParameters['id'] ?? '';
+                    return '/clientes/$id';
+                  }
+                  return null;
+                },
+                builder: (_, state) =>
+                    ClienteFormScreen(clienteId: state.pathParameters['id']),
+              ),
             ],
           ),
         ],
@@ -176,7 +195,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           // enviar_mensaje o un 4003 en el WebSocket — experiencia confusa.
           // Con el guard aquí, se redirige antes de mostrar la pantalla.
           final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
-          const rolesPermitidos = ['SUPERVISOR', 'SUPERVISOR', 'AUDITOR', 'AUDITOR', 'ASESOR'];
+          const rolesPermitidos = ['SUPERVISOR', 'AUDITOR', 'ASESOR', 'AUXILIAR', 'REVISOR'];
           if (!rolesPermitidos.contains(rol)) return '/dashboard';
           return null;
         },

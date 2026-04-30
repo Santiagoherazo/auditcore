@@ -94,7 +94,7 @@ class LoginView(APIView):
             if not codigo_mfa:
                 return Response(
                     {'detail': 'Se requiere código MFA.', 'mfa_required': True},
-                    status=200,
+                    status=202,
                 )
             if not verificar_totp(usuario, codigo_mfa):
                 log_mfa_event(email, 'verify_failed', ip=_ip, ok=False)
@@ -123,11 +123,20 @@ class MFASetupView(APIView):
     def get(self, request):
         from apps.administracion.mfa import generar_secret_totp, generar_qr_totp
         usuario = request.user
+        # Si MFA ya está habilitado, no devolver el secret (ya fue configurado y
+        # confirmado). Solo devolver el QR para re-escaneo si el usuario lo pide
+        # explícitamente, pero NUNCA el secret en texto plano.
+        if usuario.mfa_habilitado:
+            return Response({
+                'mfa_activo': True,
+                'detail': 'MFA ya está activado. Para reconfigurarlo, desactívalo primero.',
+            })
         if not usuario.mfa_secret:
             usuario.mfa_secret = generar_secret_totp()
             usuario.save(update_fields=['mfa_secret'])
         qr_b64 = generar_qr_totp(usuario)
-        return Response({'qr_base64': qr_b64, 'secret': usuario.mfa_secret})
+        # El secret solo se expone una vez, durante la configuración inicial
+        return Response({'qr_base64': qr_b64, 'secret': usuario.mfa_secret, 'mfa_activo': False})
 
     def post(self, request):
         from apps.administracion.mfa import verificar_totp
@@ -208,6 +217,11 @@ class PasswordResetConfirmView(APIView):
             return Response(
                 {'detail': 'La contraseña debe tener al menos 8 caracteres.'}, status=400
             )
+        # Validación adicional: la contraseña no debe ser solo numérica
+        if password.isdigit():
+            return Response(
+                {'detail': 'La contraseña no puede ser completamente numérica.'}, status=400
+            )
 
         try:
             usuario = UsuarioInterno.objects.get(
@@ -277,7 +291,9 @@ class SetupView(APIView):
 
     def post(self, request):
         from apps.administracion.models import UsuarioInterno
+        from django.db import transaction
 
+        # Double-checked locking: primera comprobación rápida (sin lock)
         if UsuarioInterno.objects.filter(rol='SUPERVISOR', is_superuser=True).exists():
             return Response(
                 {'detail': 'La plataforma ya fue configurada. Este endpoint está deshabilitado.'},
@@ -307,21 +323,30 @@ class SetupView(APIView):
         if errores:
             return Response(errores, status=400)
 
-        if UsuarioInterno.objects.filter(email=email).exists():
-            return Response({'email': 'Ya existe un usuario con ese email.'}, status=400)
+        try:
+            with transaction.atomic():
+                # Segunda comprobación dentro del bloque atómico para evitar race condition
+                if UsuarioInterno.objects.select_for_update().filter(rol='SUPERVISOR', is_superuser=True).exists():
+                    return Response(
+                        {'detail': 'La plataforma ya fue configurada. Este endpoint está deshabilitado.'},
+                        status=403,
+                    )
 
-        # pasamos rol explícitamente como extra kwarg al manager
-        usuario = UsuarioInterno.objects.create_superuser(
-            email=email,
-            password=password,
-            nombre=nombre,
-            apellido=apellido,
-            rol='SUPERVISOR',
-        )
-        # Asegurar estado ACTIVO (el default del modelo es ACTIVO, pero lo confirmamos)
-        if usuario.estado != 'ACTIVO':
-            usuario.estado = 'ACTIVO'
-            usuario.save(update_fields=['estado'])
+                if UsuarioInterno.objects.filter(email=email).exists():
+                    return Response({'email': 'Ya existe un usuario con ese email.'}, status=400)
+
+                usuario = UsuarioInterno.objects.create_superuser(
+                    email=email,
+                    password=password,
+                    nombre=nombre,
+                    apellido=apellido,
+                    rol='SUPERVISOR',
+                )
+                if usuario.estado != 'ACTIVO':
+                    usuario.estado = 'ACTIVO'
+                    usuario.save(update_fields=['estado'])
+        except Exception as exc:
+            return Response({'detail': f'Error al crear el usuario: {exc}'}, status=500)
 
         return Response({
             'detail': f'Plataforma "{nombre_plataforma}" configurada correctamente.',

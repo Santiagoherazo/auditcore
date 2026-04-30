@@ -24,6 +24,9 @@ def generar_qr_totp(usuario):
     """
     Genera un QR code en base64 para configurar la app autenticadora.
     El usuario debe tener mfa_secret configurado.
+    NOTA: el secret en texto plano solo se expone aquí durante la
+    configuración inicial. Una vez mfa_habilitado=True, el endpoint
+    de setup no debe volver a devolverlo.
     """
     totp = pyotp.TOTP(usuario.mfa_secret)
     uri = totp.provisioning_uri(
@@ -52,15 +55,30 @@ def verificar_totp(usuario, codigo):
 
 def registrar_intento_fallido(usuario):
     """
-    AC-04: Incrementa el contador de intentos fallidos.
+    AC-04: Incrementa el contador de intentos fallidos de forma atómica.
     Bloquea la cuenta si supera MAX_INTENTOS.
+    Usa F() + update() para evitar race condition cuando dos requests
+    simultáneos leen el mismo valor y ambos escriben el mismo incremento.
     """
-    usuario.intentos_fallidos = (usuario.intentos_fallidos or 0) + 1
-    if usuario.intentos_fallidos >= MAX_INTENTOS:
-        usuario.estado = 'BLOQUEADO'
-        usuario.fecha_bloqueo = timezone.now()
-        _notificar_bloqueo(usuario)
-    usuario.save(update_fields=['intentos_fallidos', 'estado', 'fecha_bloqueo'])
+    from django.db.models import F
+    from django.db import transaction
+
+    with transaction.atomic():
+        # Incremento atómico en la BD — evita lost-update entre requests concurrentes
+        type(usuario).objects.filter(pk=usuario.pk).update(
+            intentos_fallidos=F('intentos_fallidos') + 1
+        )
+        # Refrescar desde BD para obtener el valor real post-incremento
+        usuario.refresh_from_db(fields=['intentos_fallidos'])
+
+        if usuario.intentos_fallidos >= MAX_INTENTOS and usuario.estado != 'BLOQUEADO':
+            type(usuario).objects.filter(pk=usuario.pk).update(
+                estado='BLOQUEADO',
+                fecha_bloqueo=timezone.now(),
+            )
+            usuario.estado = 'BLOQUEADO'
+            usuario.fecha_bloqueo = timezone.now()
+            _notificar_bloqueo(usuario)
 
 
 def registrar_login_exitoso(usuario):
@@ -74,18 +92,32 @@ def verificar_bloqueo(usuario):
     """
     Retorna True si la cuenta está bloqueada.
     Desbloqueo automático después de BLOQUEO_MINUTOS.
+    Si fecha_bloqueo es None pero estado es BLOQUEADO (estado inconsistente),
+    fuerza el desbloqueo para evitar un bloqueo permanente sin causa raíz.
     """
     if usuario.estado != 'BLOQUEADO':
         return False
-    if usuario.fecha_bloqueo:
-        limite = usuario.fecha_bloqueo + timedelta(minutes=BLOQUEO_MINUTOS)
-        if timezone.now() > limite:
-            # Auto-desbloqueo
-            usuario.estado = 'ACTIVO'
-            usuario.intentos_fallidos = 0
-            usuario.fecha_bloqueo = None
-            usuario.save(update_fields=['estado', 'intentos_fallidos', 'fecha_bloqueo'])
-            return False
+    if not usuario.fecha_bloqueo:
+        # Estado inconsistente: bloqueado sin fecha de bloqueo — desbloquear
+        type(usuario).objects.filter(pk=usuario.pk).update(
+            estado='ACTIVO',
+            intentos_fallidos=0,
+        )
+        usuario.estado = 'ACTIVO'
+        usuario.intentos_fallidos = 0
+        return False
+    limite = usuario.fecha_bloqueo + timedelta(minutes=BLOQUEO_MINUTOS)
+    if timezone.now() > limite:
+        # Auto-desbloqueo atómico
+        type(usuario).objects.filter(pk=usuario.pk).update(
+            estado='ACTIVO',
+            intentos_fallidos=0,
+            fecha_bloqueo=None,
+        )
+        usuario.estado = 'ACTIVO'
+        usuario.intentos_fallidos = 0
+        usuario.fecha_bloqueo = None
+        return False
     return True
 
 

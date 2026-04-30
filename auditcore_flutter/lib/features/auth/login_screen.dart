@@ -162,8 +162,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       return 'Email o contraseña incorrectos.';
     }
     if (raw.contains('SocketException') || raw.contains('Connection') ||
-        raw.contains('XMLHttpRequest') || raw.contains('Network')) {
-      return 'No se pudo conectar con el servidor.';
+        raw.contains('XMLHttpRequest') || raw.contains('Network') ||
+        raw.contains('onError') || raw.contains('Failed to fetch')) {
+      return 'No se pudo conectar con el servidor.\n'
+             'Verifica que los servicios estén corriendo (docker compose up).';
     }
     return 'Error al iniciar sesión. Intenta de nuevo.';
   }

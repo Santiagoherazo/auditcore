@@ -64,15 +64,24 @@ class AuthNotifier extends StateNotifier<AsyncValue<UsuarioModel?>> {
       final user = await _service.getMe().timeout(const Duration(seconds: 8));
       state = AsyncValue.data(user);
     } on DioException catch (e) {
-      // sesión activa, getMe() devolvía sus datos normalmente (200) y Flutter
-      // no detectaba el cambio de estado. Ahora el backend devuelve 403 para
-      // cuentas no activas, y Flutter limpia la sesión al detectarlo.
-      if (e.response?.statusCode == 403) {
+      final status = e.response?.statusCode;
+      if (status == 401 || status == 403) {
+        // Token inválido, expirado o usuario bloqueado — limpiar sesión
         await ApiClient.clearTokens();
         state = const AsyncValue.data(null);
-        return;
+      } else {
+        // Error de red (sin conexión, timeout, 500) → mantener estado actual
+        // No limpiar tokens: el usuario puede tener sesión válida, solo hay
+        // un problema temporal de conectividad. Mostrar estado anterior.
+        if (state is! AsyncData) {
+          state = const AsyncValue.data(null);
+        }
       }
-      state = const AsyncValue.data(null);
+    } on TimeoutException {
+      // Timeout de 8s — misma lógica que error de red
+      if (state is! AsyncData) {
+        state = const AsyncValue.data(null);
+      }
     } catch (_) {
       state = const AsyncValue.data(null);
     }
@@ -89,8 +98,9 @@ final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<UsuarioModel
 );
 
 // ── Dashboard global ──────────────────────────────────────────────────────
-// Sin autoDispose, el provider vive indefinidamente con su caché aunque nadie lo escuche,
-// y al volver al dashboard devuelve datos obsoletos hasta el próximo invalidate.
+// autoDispose: cuando nadie escucha el provider, sus datos se descartan.
+// Al volver al dashboard, se vuelve a fetchear para mostrar datos frescos.
+// WebSocket llama ref.invalidate(dashboardProvider) al recibir dashboard_update.
 final dashboardProvider = FutureProvider.autoDispose<DashboardModel>((ref) async {
   return ref.watch(dashboardServiceProvider).global();
 });

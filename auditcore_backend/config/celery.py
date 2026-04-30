@@ -13,8 +13,14 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # segunda capa: si en cualquier edge case de orden de importación el valor
 # llegó vacío a settings, aquí lo corregimos antes de que cualquier tarea
 # intente usar el pool de conexiones.
-_DEFAULT_BROKER = 'amqp://auditcore:auditcore2026@rabbitmq:5672/auditcore?heartbeat=120'
-_broker_url     = os.environ.get('RABBITMQ_URL') or _DEFAULT_BROKER
+# SEGURIDAD: No hardcodear credenciales en código fuente.
+# En producción RABBITMQ_URL debe estar en las variables de entorno del sistema.
+# El fallback aquí es solo para desarrollo local con docker-compose.
+_DEFAULT_BROKER = os.environ.get(
+    'RABBITMQ_URL',
+    'amqp://auditcore:auditcore_dev_CAMBIAR_EN_PROD@rabbitmq:5672/auditcore?heartbeat=120'
+)
+_broker_url = _DEFAULT_BROKER
 
 app.conf.broker_url                    = _broker_url
 app.conf.broker_failover_strategy      = 'round-robin'
