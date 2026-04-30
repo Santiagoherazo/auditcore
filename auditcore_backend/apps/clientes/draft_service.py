@@ -167,9 +167,13 @@ def commit_draft(draft_id: str, user_id) -> dict:
             'ingresos_anuales', 'alcance_descripcion', 'declaracion_necesidad',
             'certificacion_previa_detalle', 'motivo_auditoria', 'urgencia',
             'tamano', 'notas',
+            # Campos faltantes en la lista original:
+            'duracion_empresa', 'rep_legal_tipo_doc',
         ]
         for field in str_blank_fields:
             if field not in data:
+                data[field] = ''
+            elif data[field] is None:
                 data[field] = ''
 
         # Campos JSON con default de lista
@@ -190,9 +194,20 @@ def commit_draft(draft_id: str, user_id) -> dict:
             if data.get(dfield) == '':
                 data[dfield] = None
 
-        # Eliminar campos que no pertenecen al modelo Cliente
-        cliente_field_names = {f.name for f in Cliente._meta.get_fields()}
-        data_clean = {k: v for k, v in data.items() if k in cliente_field_names}
+        # Eliminar campos que no pertenecen al modelo Cliente.
+        # IMPORTANTE: usar concrete_fields (columnas reales) + many_to_many en lugar de
+        # get_fields(), que también devuelve relaciones inversas (contactos, sedes, etc.)
+        # con nombres que podrían colisionar con claves del draft y causar TypeError en create().
+        cliente_field_names = (
+            {f.name for f in Cliente._meta.concrete_fields}
+            | {f.name for f in Cliente._meta.many_to_many}
+        )
+        # Excluir campos FK que se manejan por separado o no deben venir del formulario
+        _CAMPOS_EXCLUIDOS = {'creado_por', 'asesor_responsable'}
+        data_clean = {
+            k: v for k, v in data.items()
+            if k in cliente_field_names and k not in _CAMPOS_EXCLUIDOS
+        }
 
         from django.contrib.auth import get_user_model
         User = get_user_model()

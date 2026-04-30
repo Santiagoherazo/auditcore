@@ -4,11 +4,15 @@ adapters/api/views_draft.py
 Views para el flujo de borrador (draft) de creación de clientes.
 Separadas de views.py para mantener el archivo principal manejable.
 """
+import logging
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 
 from adapters.api.permissions import CanCreateClientes
+
+logger = logging.getLogger(__name__)
 
 
 class ClienteDraftCreateView(APIView):
@@ -68,6 +72,19 @@ class ClienteDraftCommitView(APIView):
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as exc:
+            # Detectar errores comunes de BD para dar mensajes claros al usuario
+            exc_str = str(exc).lower()
+            if 'unique' in exc_str and 'nit' in exc_str:
+                return Response(
+                    {'error': 'Ya existe un cliente con ese NIT. Verifica el número ingresado.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if 'unique' in exc_str:
+                return Response(
+                    {'error': f'Ya existe un registro con ese valor. Detalle: {exc}'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            logger.exception('Error en commit_draft %s', draft_id)
             return Response(
                 {'error': f'Error al guardar el cliente: {exc}'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,

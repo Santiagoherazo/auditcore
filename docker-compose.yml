@@ -1,5 +1,18 @@
 services:
 
+  # ── Variables comunes reutilizadas en backend, celery_worker y celery_beat ──
+  # Usar &anchor y *alias de YAML elimina la duplicación de estas variables
+  # que SonarQube reporta como code smell en docker-compose.
+  # Para cambiar el modelo Ollama o el settings module, modificar aquí una sola vez.
+  x-common-env: &common-env
+    DATABASE_URL: postgres://${POSTGRES_USER:-auditcore_user}:${POSTGRES_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@postgres:5432/auditcore
+    REDIS_URL: redis://redis:6379/0
+    RABBITMQ_URL: amqp://auditcore:${RABBITMQ_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@rabbitmq:5672/auditcore?heartbeat=120
+    OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-https://santiagoherazo.ddns.net:11435}
+    OLLAMA_SSL_VERIFY: ${OLLAMA_SSL_VERIFY:-False}
+    OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+    DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.development}
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -67,13 +80,7 @@ services:
     build: ./auditcore_backend
     env_file: ./auditcore_backend/.env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER:-auditcore_user}:${POSTGRES_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@postgres:5432/auditcore
-      - REDIS_URL=redis://redis:6379/0
-      - RABBITMQ_URL=amqp://auditcore:${RABBITMQ_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@rabbitmq:5672/auditcore?heartbeat=120
-      - OLLAMA_BASE_URL=https://santiagoherazo.ddns.net:11435
-      - OLLAMA_SSL_VERIFY=False
-      - OLLAMA_MODEL=llama3.1:8b
-      - DJANGO_SETTINGS_MODULE=config.settings.development
+      <<: *common-env
     # SEGURIDAD: Puerto 8000 solo accesible a través de Nginx (frontend).
     # No exponer directamente al host en producción.
     # ports:
@@ -109,13 +116,7 @@ services:
     build: ./auditcore_backend
     env_file: ./auditcore_backend/.env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER:-auditcore_user}:${POSTGRES_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@postgres:5432/auditcore
-      - REDIS_URL=redis://redis:6379/0
-      - RABBITMQ_URL=amqp://auditcore:${RABBITMQ_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@rabbitmq:5672/auditcore?heartbeat=120
-      - OLLAMA_BASE_URL=https://santiagoherazo.ddns.net:11435
-      - OLLAMA_SSL_VERIFY=False
-      - OLLAMA_MODEL=llama3.1:8b
-      - DJANGO_SETTINGS_MODULE=config.settings.development
+      <<: *common-env
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,10 +148,7 @@ services:
     build: ./auditcore_backend
     env_file: ./auditcore_backend/.env
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER:-auditcore_user}:${POSTGRES_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@postgres:5432/auditcore
-      - REDIS_URL=redis://redis:6379/0
-      - RABBITMQ_URL=amqp://auditcore:${RABBITMQ_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@rabbitmq:5672/auditcore?heartbeat=120
-      - DJANGO_SETTINGS_MODULE=config.settings.development
+      <<: *common-env
     depends_on:
       postgres:
         condition: service_healthy

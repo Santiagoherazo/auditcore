@@ -1,3 +1,6 @@
+import logging
+import os
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,6 +10,8 @@ from rest_framework.exceptions import ValidationError
 from django.utils import timezone
 from django.db.models import Count, Q
 
+logger = logging.getLogger(__name__)
+
 try:
     from adapters.realtime.chatbot_logger import (
         ids_log, IDS as _IDS, broker_diagnostic, new_trace_id,
@@ -15,7 +20,6 @@ try:
     _broker_diag  = broker_diagnostic
     _new_trace_id = new_trace_id
     _IDS_API    = _IDS.API
-    _IDS_BROKER = _IDS.BROKER
     _IDS_CELERY = _IDS.CELERY
     _IDS_ERROR  = _IDS.ERROR
 except ImportError:
@@ -23,7 +27,6 @@ except ImportError:
     def _broker_diag(*a, **kw): pass   # type: ignore[misc]
     def _new_trace_id(): return 'na'   # type: ignore[misc]
     _IDS_API    = 'API'
-    _IDS_BROKER = 'BROKER'
     _IDS_CELERY = 'CELERY'
     _IDS_ERROR  = 'ERROR'
 
@@ -88,6 +91,26 @@ from adapters.api.permissions import (
 )
 
 
+# ── Helpers internos ──────────────────────────────────────────────────────────
+
+def _blacklist_user_tokens(user) -> None:
+    """Revoca todos los tokens JWT activos del usuario dado.
+
+    Centraliza la lógica de blacklist que antes se duplicaba en
+    _soft_delete, perform_update y desactivar de UsuarioInternoViewSet.
+    Si el módulo token_blacklist no está instalado o la BD falla,
+    los tokens expirarán por su propio TTL (ACCESS_TOKEN_LIFETIME).
+    """
+    try:
+        from rest_framework_simplejwt.token_blacklist.models import (
+            OutstandingToken, BlacklistedToken,
+        )
+        for token in OutstandingToken.objects.filter(user=user):
+            BlacklistedToken.objects.get_or_create(token=token)
+    except Exception:
+        pass  # Si blacklist no disponible, los tokens expirarán naturalmente
+
+
 # ── Soft Delete Mixin ─────────────────────────────────────────────────────────
 # Por estándar, NADA se elimina físicamente. Cada modelo usa su campo semántico:
 #   UsuarioInterno   → estado = 'INACTIVO', is_active = False
@@ -127,14 +150,7 @@ class UsuarioInternoViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         instance.estado    = 'INACTIVO'
         instance.is_active = False
         instance.save(update_fields=['estado', 'is_active'])
-        try:
-            from rest_framework_simplejwt.token_blacklist.models import (
-                OutstandingToken, BlacklistedToken,
-            )
-            for token in OutstandingToken.objects.filter(user=instance):
-                BlacklistedToken.objects.get_or_create(token=token)
-        except Exception:
-            pass
+        _blacklist_user_tokens(instance)
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -148,14 +164,7 @@ class UsuarioInternoViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         """PATCH — solo actualiza campos enviados; si is_active cambia, invalida tokens."""
         instance = serializer.save()
         if not instance.is_active:
-            try:
-                from rest_framework_simplejwt.token_blacklist.models import (
-                    OutstandingToken, BlacklistedToken,
-                )
-                for token in OutstandingToken.objects.filter(user=instance):
-                    BlacklistedToken.objects.get_or_create(token=token)
-            except Exception:
-                pass
+            _blacklist_user_tokens(instance)
     
     @action(detail=True, methods=['post'], url_path='activar')
     def activar(self, request, pk=None):
@@ -202,20 +211,9 @@ class UsuarioInternoViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         usuario.estado    = 'INACTIVO'
         usuario.is_active = False
         usuario.save(update_fields=['estado', 'is_active'])
-        # y el refresh token 7 días. Con BLACKLIST_AFTER_ROTATION=True los tokens
-        # solo se invalidan en el próximo refresh, no de inmediato.
         # Forzar la revocación de todos los outstanding tokens evita que una
         # cuenta desactivada siga operando hasta que expiren naturalmente.
-        try:
-            from rest_framework_simplejwt.token_blacklist.models import (
-                OutstandingToken, BlacklistedToken,
-            )
-            tokens = OutstandingToken.objects.filter(user=usuario)
-            for token in tokens:
-                BlacklistedToken.objects.get_or_create(token=token)
-        except Exception:
-            # Si el blacklist no está instalado o falla, el token expirará solo
-            pass
+        _blacklist_user_tokens(usuario)
         return Response({'detail': 'Usuario desactivado.'})
 
 
@@ -1071,8 +1069,7 @@ class CertificacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         try:
             task = generar_informe_pdf.delay(str(certificacion.id))
         except _BROKER_ERRORS as exc:
-            import logging
-            logging.getLogger(__name__).error('Broker no disponible para PDF: %s', exc)
+            logger.error('Broker no disponible para PDF: %s', exc)
             return Response(
                 {'error': 'El servicio de generación de PDFs no está disponible. Intenta en unos segundos.'},
                 status=503,
@@ -1145,10 +1142,6 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def enviar_mensaje(self, request, pk=None):
-        import logging
-        import os as _os
-        logger_chatbot = logging.getLogger(__name__)
-
         conversacion = self.get_object()
         contenido    = request.data.get('contenido', '').strip()
 
@@ -1195,7 +1188,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
                  trace_id=trace,
                  msg='pre_publish_broker_state',
                  celery_app_broker_url=str(_celery_app.conf.broker_url),
-                 env_RABBITMQ_URL=_os.environ.get('RABBITMQ_URL', '<NOT_SET>'),
+                 env_RABBITMQ_URL=os.environ.get('RABBITMQ_URL', '<NOT_SET>'),
                  pool_limit=str(_celery_app.conf.broker_pool_limit),
                  failover=str(_celery_app.conf.broker_failover_strategy))
 
@@ -1229,7 +1222,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
             # Ver resultado en: grep 'broker_diagnostic_snapshot' /app/logs/chatbot_ids.log
             # El campo 'broker_url_mismatch_detected' confirma el bug de decouple.
             _broker_diag(conv_id=str(conversacion.id), trace_id=trace)
-            logger_chatbot.error(
+            logger.error(
                 '[IDS][BROKER] Broker no disponible conv=%s trace=%s exc=%s: %s',
                 conversacion.id, trace, type(exc).__name__, exc,
             )
@@ -1416,8 +1409,7 @@ class ExportarReporteView(APIView):
         try:
             task = generar_reporte_excel.delay(tipo, filtros)
         except _BROKER_ERRORS as exc:
-            import logging
-            logging.getLogger(__name__).error('Broker no disponible para reporte Excel: %s', exc)
+            logger.error('Broker no disponible para reporte Excel: %s', exc)
             return Response(
                 {'error': 'El servicio de reportes no está disponible. Intenta en unos segundos.'},
                 status=503,

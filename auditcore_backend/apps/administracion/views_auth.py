@@ -5,6 +5,7 @@ AC-03: MFA TOTP
 AC-04: Bloqueo automático tras 5 intentos
 AC-05: Recuperación de contraseña
 """
+import logging
 import secrets
 from datetime import timedelta
 from django.utils import timezone
@@ -15,6 +16,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
+
+logger = logging.getLogger(__name__)
+
 
 try:
     from adapters.realtime.auditlog import (
@@ -346,7 +350,11 @@ class SetupView(APIView):
                     usuario.estado = 'ACTIVO'
                     usuario.save(update_fields=['estado'])
         except Exception as exc:
-            return Response({'detail': f'Error al crear el usuario: {exc}'}, status=500)
+            logger.exception('Error al crear superusuario en setup: %s', exc)
+            return Response(
+                {'detail': 'Error interno al crear el usuario. Revisa los logs del servidor.'},
+                status=500,
+            )
 
         return Response({
             'detail': f'Plataforma "{nombre_plataforma}" configurada correctamente.',
