@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../core/theme/app_theme.dart';
 
-// ══════════════════════════════════════════════════════════════════════════
-//  BADGE DE ESTADO
-// ══════════════════════════════════════════════════════════════════════════
+
 class StatusBadge extends StatelessWidget {
   final String estado;
   final String? label;
@@ -31,9 +29,7 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  SIDEBAR FIJO (desktop/tablet)
-// ══════════════════════════════════════════════════════════════════════════
+
 class AppSidebar extends StatelessWidget {
   final String rutaActual;
   final String rolUsuario;
@@ -59,7 +55,7 @@ class AppSidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Logo
+
           Container(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
             decoration: const BoxDecoration(
@@ -109,7 +105,7 @@ class AppSidebar extends StatelessWidget {
 
           const Spacer(),
 
-          // Usuario bottom
+
           Container(
             padding: const EdgeInsets.all(12),
             decoration: const BoxDecoration(
@@ -178,11 +174,7 @@ class AppSidebar extends StatelessWidget {
     }).toList();
   }
 
-  // Matriz de permisos según documentación:
-  // Admin: todo | Líder: clientes(r), expedientes, hallazgos, docs, certs, chat
-  // Auditor: expedientes (asignados), hallazgos, docs, chat
-  // Ejecutivo: clientes, expedientes (fase contacto/análisis), chat
-  // Cliente: portal propio (no usa este sidebar)
+
   List<Map<String, dynamic>> _itemsParaRol(String rol) {
     return [
       {'section': 'principal', 'label': 'Dashboard',
@@ -322,9 +314,7 @@ class _SidebarItem extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  SHELL DE PANTALLA (sidebar + contenido)
-// ══════════════════════════════════════════════════════════════════════════
+
 class AppShell extends StatelessWidget {
   final Widget child;
   final String rutaActual;
@@ -352,7 +342,7 @@ class AppShell extends StatelessWidget {
     final isWide = MediaQuery.of(context).size.width >= 720;
 
     if (isWide) {
-      // Layout desktop: sidebar fijo izquierda + contenido derecha
+
       return Scaffold(
         backgroundColor: AppColors.bg,
         body: Row(
@@ -374,7 +364,7 @@ class AppShell extends StatelessWidget {
         ),
       );
     } else {
-      // Layout móvil: AppBar + Drawer + BottomNav
+
       return Scaffold(
         backgroundColor: AppColors.bg,
         appBar: AppBar(
@@ -501,11 +491,7 @@ class _NavTab {
   const _NavTab({required this.icon, required this.label, required this.ruta});
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  COMPONENTES DE DATOS
-// ══════════════════════════════════════════════════════════════════════════
 
-/// Tarjeta de métrica
 class MetricCard extends StatelessWidget {
   final String valor;
   final String label;
@@ -571,9 +557,9 @@ class MetricCard extends StatelessWidget {
 
 enum MetricDeltaType { up, down, warning, neutral }
 
-/// Barra de progreso inline
+
 class InlineProgress extends StatelessWidget {
-  final double value; // 0.0 - 1.0
+  final double value;
   const InlineProgress({super.key, required this.value});
 
   @override
@@ -612,7 +598,7 @@ class InlineProgress extends StatelessWidget {
   }
 }
 
-/// Estado vacío
+
 class EmptyState extends StatelessWidget {
   final String titulo;
   final String subtitulo;
@@ -664,7 +650,7 @@ class EmptyState extends StatelessWidget {
   }
 }
 
-/// Header de sección
+
 class SectionHeader extends StatelessWidget {
   final String titulo;
   final Widget? trailing;
@@ -692,7 +678,7 @@ class SectionHeader extends StatelessWidget {
   }
 }
 
-/// LoadingOverlay
+
 class LoadingOverlay extends StatelessWidget {
   final bool isLoading;
   final Widget child;
@@ -719,7 +705,7 @@ class LoadingOverlay extends StatelessWidget {
   }
 }
 
-/// InfoCard (compatibilidad) → redirige a MetricCard
+
 class InfoCard extends StatelessWidget {
   final String titulo;
   final String valor;
@@ -790,7 +776,7 @@ class InfoCard extends StatelessWidget {
   }
 }
 
-/// ProgressCard (compatibilidad)
+
 class ProgressCard extends StatelessWidget {
   final String titulo;
   final double porcentaje;
@@ -846,7 +832,7 @@ class ProgressCard extends StatelessWidget {
   }
 }
 
-/// AppDrawer (compatibilidad móvil)
+
 class AppDrawer extends StatelessWidget {
   final String rolUsuario;
   final String nombreUsuario;

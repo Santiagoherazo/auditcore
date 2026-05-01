@@ -6,12 +6,11 @@ DEBUG = False
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 
-# CORS_ALLOWED_ORIGINS se lee desde variable de entorno en producción.
-# Ejemplo: CORS_ALLOWED_ORIGINS=https://auditcore.tuempresa.com,https://app.tuempresa.com
+
 _cors_origins = _os.environ.get('CORS_ALLOWED_ORIGINS', '')
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
 if not CORS_ALLOWED_ORIGINS:
-    # Fallback de desarrollo — NO usar en producción real
+
     import warnings
     warnings.warn(
         'CORS_ALLOWED_ORIGINS no está configurado. '
@@ -21,14 +20,11 @@ if not CORS_ALLOWED_ORIGINS:
     )
     CORS_ALLOWED_ORIGINS = ['http://localhost:3000']
 
-# ALLOWED_HOSTS lee de variable de entorno — sin localhost hardcodeado en producción.
-# Ejemplo .env producción: ALLOWED_HOSTS=auditcore.tuempresa.com,backend
+
 _extra_hosts = _os.environ.get('ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = ['backend'] + [h.strip() for h in _extra_hosts.split(',') if h.strip()]
 
-# HTTPS — Django detrás de Nginx
-# SECURE_SSL_REDIRECT=False porque Nginx maneja HTTPS externamente.
-# Django confía en X-Forwarded-Proto que Nginx envía.
+
 SECURE_SSL_REDIRECT             = False
 SECURE_PROXY_SSL_HEADER         = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE           = True

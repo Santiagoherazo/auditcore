@@ -24,26 +24,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   void initState() {
     super.initState();
 
-    // FIX: cancelar suscripciones anteriores antes de reconectar.
-    // Sin esto, cada navegación acumula listeners sobre la misma instancia
-    // global → múltiples callbacks por evento y conexiones huérfanas.
+
     _wsDashSub?.cancel();
     _wsNotiSub?.cancel();
 
-    // FIX: solo conectar el WS del dashboard para roles que tienen acceso.
-    // BUG ORIGINAL: siempre se intentaba conectar wsDashboard sin verificar el rol.
-    // Un AUDITOR (sin acceso al dashboard WS) generaba un 4003 en cada sesión,
-    // llenando los logs del backend con rechazos innecesarios.
-    // Los roles con acceso al dashboard WS son ADMIN, AUDITOR_LIDER, EJECUTIVO.
-    // El AUDITOR recibe actualizaciones solo via polling (refreshTimer).
+
     final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
     const rolesConDashboardWs = ['SUPERVISOR', 'SUPERVISOR', 'ASESOR'];
 
     if (rolesConDashboardWs.contains(rol)) {
       wsDashboard.connect('ws/dashboard/');
       _wsDashSub = wsDashboard.stream.listen((event) {
-        // FIX: data:{} vacío significa "recargar desde HTTP" (señal de refresh).
-        // El endpoint GET /api/dashboard/ filtra los KPIs por rol del token.
+
+
         if ((event['type'] == 'dashboard_update') && mounted) {
           ref.invalidate(dashboardProvider);
         }
@@ -58,7 +51,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       }
     });
 
-    // Polling de respaldo cada 30 s — cubre a AUDITOR y casos donde WS falla
+
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) ref.invalidate(dashboardProvider);
     });
@@ -69,11 +62,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     _refreshTimer?.cancel();
     _wsDashSub?.cancel();
     _wsNotiSub?.cancel();
-    // FIX: desconectar WebSockets al destruir el widget.
-    // Sin esto, al navegar a otra pantalla el widget se destruye pero los
-    // sockets siguen vivos. Al volver, initState abre conexiones nuevas
-    // sin cerrar las anteriores → loop WSCONNECT/WSDISCONNECT cada 4s
-    // que colapsa Daphne y bloquea el broker AMQP del backend.
+
+
     wsDashboard.disconnect();
     wsNotificaciones.disconnect();
     super.dispose();
@@ -183,7 +173,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-            // Saludo
+
             Text(
               '${_saludo()}, ${usuario?.nombre ?? 'Usuario'}',
               style: const TextStyle(
@@ -198,7 +188,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 style: TextStyle(fontSize: 12, color: AppColors.textTertiary)),
             const SizedBox(height: 20),
 
-            // Métricas 4 columnas responsive
+
             LayoutBuilder(builder: (ctx, c) {
               final cols = c.maxWidth > 600 ? 4 : 2;
               return GridView.count(
@@ -248,7 +238,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               );
             }),
 
-            // Alerta por vencer
+
             if (dash.certificacionesPorVencer > 0) ...[
               const SizedBox(height: 16),
               Container(
@@ -278,7 +268,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
 
-            // Expedientes por estado
+
             if (dash.expedientesPorEstado.isNotEmpty) ...[
               const SectionHeader(titulo: 'Distribución por estado'),
               Card(
@@ -320,7 +310,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ],
 
-            // Accesos rápidos
+
             const SectionHeader(titulo: 'Accesos rápidos'),
             Wrap(
               spacing: 8,

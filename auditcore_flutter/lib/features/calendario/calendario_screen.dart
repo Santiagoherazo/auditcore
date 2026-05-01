@@ -7,7 +7,6 @@ import '../../core/services/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
-// ── Providers ─────────────────────────────────────────────────────────────────
 
 final ganttExpedientesProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
@@ -38,7 +37,6 @@ final visitasMesProvider = FutureProvider.autoDispose.family<
   } catch (_) { return []; }
 });
 
-// ── Pantalla ──────────────────────────────────────────────────────────────────
 
 class CalendarioScreen extends ConsumerStatefulWidget {
   const CalendarioScreen({super.key});
@@ -104,7 +102,6 @@ class _CalendarioScreenState extends ConsumerState<CalendarioScreen>
   }
 }
 
-// ── Vista Gantt ───────────────────────────────────────────────────────────────
 
 class _GanttView extends ConsumerWidget {
   @override
@@ -169,7 +166,7 @@ class _GanttDiagramState extends State<_GanttDiagram> {
     final hoyOff = hoy.difference(_start).inDays;
     final totalW = _days * dayW.toDouble();
     return Column(children: [
-      // Leyenda
+
       Container(color:AppColors.white,
         padding:const EdgeInsets.symmetric(horizontal:12,vertical:8),
         child: Wrap(spacing:12,runSpacing:6,
@@ -189,7 +186,7 @@ class _GanttDiagramState extends State<_GanttDiagram> {
       Expanded(child:SingleChildScrollView(child:SizedBox(
         height: headerH + widget.expedientes.length * rowH + 16,
         child: Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          // Labels fijas
+
           SizedBox(width:labelW,child:Column(children:[
             SizedBox(height:headerH),
             ...widget.expedientes.asMap().entries.map((e){
@@ -209,7 +206,7 @@ class _GanttDiagramState extends State<_GanttDiagram> {
               ]));
             }),
           ])),
-          // Área scrollable horizontal
+
           Expanded(child:SingleChildScrollView(
             controller:_hScroll,scrollDirection:Axis.horizontal,
             child:SizedBox(width:totalW,
@@ -245,13 +242,13 @@ class _GanttPainter extends CustomPainter {
   @override
   void paint(Canvas canvas,Size size){
     final tp=TextPainter(textDirection:TextDirection.ltr);
-    // Filas alternadas
+
     for(int i=0;i<expedientes.length;i++){
       final y=headerH+i*rowH;
       canvas.drawRect(Rect.fromLTWH(0,y,size.width,rowH),
         Paint()..color=i.isOdd?const Color(0xFFF8FAFC):Colors.white);
     }
-    // Columnas de días + header
+
     DateTime cur=rangeStart; String? lastM;
     for(int d=0;d<totalDays;d++){
       final x=d*dayW;
@@ -273,7 +270,7 @@ class _GanttPainter extends CustomPainter {
       }
       cur=cur.add(const Duration(days:1));
     }
-    // Línea de hoy
+
     if(hoyOffset>=0&&hoyOffset<totalDays){
       final x=hoyOffset*dayW+dayW/2;
       canvas.drawLine(Offset(x,headerH*0.35),Offset(x,size.height),
@@ -282,7 +279,7 @@ class _GanttPainter extends CustomPainter {
           color:AppColors.danger,fontWeight:FontWeight.w700));
       tp.layout(); tp.paint(canvas,Offset(x-tp.width/2,26));
     }
-    // Barras
+
     for(int i=0;i<expedientes.length;i++){
       final exp=expedientes[i]; final color=paleta[i%paleta.length];
       final y=headerH+i*rowH;
@@ -292,24 +289,24 @@ class _GanttPainter extends CustomPainter {
       final eo=e.difference(rangeStart).inDays;
       final bx=max(0,so)*dayW; final bw=max(1.0,(eo-max(0,so))*dayW);
       final by=y+rowH*0.2; final bh=rowH*0.55;
-      // Sombra
+
       canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(bx+1,by+2,bw,bh),const Radius.circular(4)),
         Paint()..color=color.withOpacity(0.15)..maskFilter=const MaskFilter.blur(BlurStyle.normal,3));
-      // Barra
+
       canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(bx,by,bw,bh),const Radius.circular(4)),
         Paint()..color=color.withOpacity(0.85));
-      // Progreso
+
       final pct=(exp['porcentaje_avance'] as num? ?? 0)/100.0;
       if(pct>0) canvas.drawRRect(
         RRect.fromRectAndRadius(Rect.fromLTWH(bx,by,bw*pct,bh),const Radius.circular(4)),
         Paint()..color=Colors.white.withOpacity(0.3));
-      // Label
+
       if(bw>45){
         tp.text=TextSpan(text:exp['numero_expediente'] as String? ?? '',
             style:const TextStyle(fontSize:9,color:Colors.white,fontWeight:FontWeight.w600));
         tp.layout(maxWidth:bw-6); tp.paint(canvas,Offset(bx+4,by+(bh-tp.height)/2));
       }
-      // Fases como sub-barras
+
       final fases=exp['fases'] as List? ?? [];
       for(int f=0;f<fases.length&&f<4;f++){
         final fase=fases[f] as Map<String,dynamic>;
@@ -327,7 +324,6 @@ class _GanttPainter extends CustomPainter {
   @override bool shouldRepaint(_GanttPainter o)=>o.expedientes!=expedientes;
 }
 
-// ── Visitas ───────────────────────────────────────────────────────────────────
 
 class _VisitasView extends ConsumerStatefulWidget {
   final ValueNotifier<DateTime> mesNotifier;
@@ -422,7 +418,6 @@ class _VisitaCard extends StatelessWidget {
   }
 }
 
-// ── Formulario visita ─────────────────────────────────────────────────────────
 
 class _VisitaForm extends ConsumerStatefulWidget {
   final VoidCallback onGuardado;

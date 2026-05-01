@@ -8,13 +8,13 @@ import '../../core/services/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
-// ── Provider estado MFA ───────────────────────────────────────────────────────
+
 final mfaEstadoProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
   final resp = await ApiClient.instance.get(Endpoints.mfaSetup);
   return resp.data as Map<String, dynamic>;
 });
 
-// ── Pantalla de preferencias MFA ──────────────────────────────────────────────
+
 class PreferenciasMfaScreen extends ConsumerStatefulWidget {
   const PreferenciasMfaScreen({super.key});
   @override
@@ -41,7 +41,7 @@ class _PreferenciasMfaScreenState
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Estado actual
+
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -96,7 +96,7 @@ class _PreferenciasMfaScreenState
           const SizedBox(height: 16),
 
           if (!mfaActivado) ...[
-            // ── Activar MFA ─────────────────────────────────────────────
+
             const Text('Configurar verificación en dos pasos',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary)),
@@ -130,7 +130,7 @@ class _PreferenciasMfaScreenState
               ),
             ),
           ] else ...[
-            // ── Desactivar MFA ──────────────────────────────────────────
+
             const Text('Desactivar verificación en dos pasos',
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600,
                     color: AppColors.textPrimary)),
@@ -171,7 +171,7 @@ class _PreferenciasMfaScreenState
   }
 }
 
-// ── Panel para activar MFA ────────────────────────────────────────────────────
+
 class _PanelActivarMfa extends ConsumerStatefulWidget {
   final String qrBase64;
   final String secret;
@@ -220,13 +220,13 @@ class _PanelActivarMfaState extends ConsumerState<_PanelActivarMfa> {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Pasos
+
       const Text('Sigue estos pasos:',
           style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
               color: AppColors.textPrimary)),
       const SizedBox(height: 12),
 
-      // Paso 1 — QR
+
       _Paso(
         numero: '1',
         titulo: 'Escanea el código QR con tu app',
@@ -239,10 +239,8 @@ class _PanelActivarMfaState extends ConsumerState<_PanelActivarMfa> {
                     border: Border.all(color: AppColors.border),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  // FIX: Uri.parse().data!.contentAsBytes() lanza excepción
-                  // en Flutter Web cuando el string base64 contiene '+' o '/'
-                  // sin encodear como URI (caso normal en PNGs). Usar
-                  // base64Decode() de dart:convert es la forma correcta.
+
+
                   child: Image.memory(
                     base64Decode(widget.qrBase64),
                     width: 160, height: 160,
@@ -255,7 +253,7 @@ class _PanelActivarMfaState extends ConsumerState<_PanelActivarMfa> {
       ),
       const SizedBox(height: 8),
 
-      // Clave manual
+
       if (widget.secret.isNotEmpty) ...[
         const Text('¿No puedes escanear? Ingresa esta clave manualmente:',
             style: TextStyle(fontSize: 11, color: AppColors.textTertiary)),
@@ -295,7 +293,7 @@ class _PanelActivarMfaState extends ConsumerState<_PanelActivarMfa> {
         const SizedBox(height: 16),
       ],
 
-      // Paso 2 — código de verificación
+
       _Paso(
         numero: '2',
         titulo: 'Ingresa el código que muestra tu app',
@@ -347,7 +345,7 @@ class _PanelActivarMfaState extends ConsumerState<_PanelActivarMfa> {
   }
 }
 
-// ── Panel para desactivar MFA ─────────────────────────────────────────────────
+
 class _PanelDesactivarMfa extends ConsumerStatefulWidget {
   final VoidCallback onDesactivado;
   const _PanelDesactivarMfa({required this.onDesactivado});
@@ -442,7 +440,7 @@ class _PanelDesactivarMfaState extends ConsumerState<_PanelDesactivarMfa> {
   }
 }
 
-// ── Widget paso numerado ──────────────────────────────────────────────────────
+
 class _Paso extends StatelessWidget {
   final String numero;
   final String titulo;

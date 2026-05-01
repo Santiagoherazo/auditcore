@@ -34,10 +34,8 @@ class Expediente(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.numero_expediente:
-            # Generar número de expediente de forma atómica y segura.
-            # select_for_update() aplica FOR UPDATE en el SELECT de MAX,
-            # lo que hace un row-level lock en PostgreSQL y previene que dos
-            # inserts concurrentes lean el mismo MAX y generen números duplicados.
+
+
             with transaction.atomic():
                 from django.utils import timezone
                 from django.db.models import Max
@@ -72,10 +70,8 @@ class Expediente(models.Model):
             return 0
         completados = items.exclude(estado='PENDIENTE').count()
         nuevo_avance = round((completados / total) * 100, 2)
-        # self.porcentaje_avance viene de la BD como Decimal (DecimalField).
-        # nuevo_avance es un float. Decimal('33.33') != 33.33 (float) en Python,
-        # lo que causaba que la comparación siempre devolviera False y se escribiera
-        # a la BD en cada llamada, incluso cuando el valor no había cambiado.
+
+
         if self.porcentaje_avance != Decimal(str(nuevo_avance)):
             self.porcentaje_avance = nuevo_avance
             Expediente.objects.filter(pk=self.pk).update(porcentaje_avance=nuevo_avance)
@@ -157,13 +153,8 @@ class BitacoraExpediente(models.Model):
 
 
 class VisitaAgendada(models.Model):
-    """
-    Visita de auditoría agendada — conectada con FaseExpediente.
 
-    Punto 5: El calendario muestra las visitas agendadas por expediente/fase.
-    Una visita corresponde a una fase o sub-actividad planificada.
-    Eliminación virtual: estado = CANCELADA.
-    """
+
     TIPO_CHOICES = [
         ('APERTURA',     'Reunión de apertura'),
         ('CAMPO',        'Visita en campo'),
@@ -221,4 +212,4 @@ class VisitaAgendada(models.Model):
             return 0.0
         delta = self.fecha_fin - self.fecha_inicio
         horas = round(delta.total_seconds() / 3600, 1)
-        return max(horas, 0.0)  # nunca negativo
+        return max(horas, 0.0)

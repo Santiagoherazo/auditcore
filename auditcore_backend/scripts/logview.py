@@ -1,34 +1,10 @@
-#!/usr/bin/env python3
-"""
-logview.py — Visor en tiempo real del log de AuditCore
-=======================================================
-
-Uso:
-    # Monitor en vivo (pipe desde tail -f)
-    docker compose exec backend tail -f /app/logs/auditcore.log | python3 /app/scripts/logview.py
-
-    # Solo errores y warnings
-    docker compose exec backend tail -f /app/logs/auditcore.log | python3 /app/scripts/logview.py --min-level warning
-
-    # Solo categoría HTTP y SEC
-    docker compose exec backend tail -f /app/logs/auditcore.log | python3 /app/scripts/logview.py --cat HTTP SEC
-
-    # Buscar por usuario
-    docker compose exec backend grep '"user":"jperez"' /app/logs/auditcore.log | python3 /app/scripts/logview.py
-
-    # Estadísticas de los últimos N minutos
-    docker compose exec backend python3 /app/scripts/logview.py --stats --file /app/logs/auditcore.log
-
-    # Ver solo errores del log de errores
-    docker compose exec backend tail -100 /app/logs/auditcore_err.log | python3 /app/scripts/logview.py
-"""
 import sys
 import json
 import argparse
 from collections import Counter, defaultdict
 from datetime import datetime
 
-# Colores ANSI
+
 RESET  = '\033[0m'
 BOLD   = '\033[1m'
 DIM    = '\033[2m'
@@ -92,19 +68,19 @@ def format_line(d: dict, compact: bool = False) -> str:
     latency_ms = d.get('latency_ms', '')
     traceback  = d.get('traceback', '')
 
-    # Tiempo legible
+
     time_str = f"{ts}.{ms:03d}" if ts else '?'
 
     lc = LEVEL_COLOR.get(level, '')
     cc = CAT_COLOR.get(cat, '')
     icon = CAT_ICON.get(cat, '  ')
 
-    # Extras (sin campos base)
+
     skip = {'ts', 'ms', 'level', 'cat', 'proc', 'pid', 'op', 'msg',
             'user', 'ip', 'op_id', 'status', 'latency_ms', 'traceback'}
     extras = {k: v for k, v in d.items() if k not in skip}
 
-    # Construir línea principal
+
     parts = []
     parts.append(f"{GRAY}{time_str}{RESET}")
     parts.append(f"{cc}{icon} {cat:<6}{RESET}")
@@ -127,7 +103,7 @@ def format_line(d: dict, compact: bool = False) -> str:
     if tags:
         line += '  ' + '  '.join(tags)
 
-    # Traceback en rojo indentado
+
     if traceback:
         tb_lines = traceback.strip().split('\n')
         tb_formatted = '\n    '.join(f'{RED}{l}{RESET}' for l in tb_lines[-10:])
@@ -150,12 +126,7 @@ def _latency_color(ms: int) -> str:
     return RED
 
 
-def print_stats(records: list[dict]) -> None:
-    print(f"\n{BOLD}{'═'*60}{RESET}")
-    print(f"{BOLD}  ESTADÍSTICAS — {len(records)} eventos{RESET}")
-    print(f"{BOLD}{'═'*60}{RESET}\n")
-
-    # Por categoría
+def _print_stats_categorias(records: list[dict]) -> None:
     cats = Counter(r.get('cat', '?') for r in records)
     print(f"{BOLD}Por categoría:{RESET}")
     for cat, n in sorted(cats.items(), key=lambda x: -x[1]):
@@ -163,7 +134,8 @@ def print_stats(records: list[dict]) -> None:
         cc = CAT_COLOR.get(cat, '')
         print(f"  {cc}{cat:<8}{RESET}  {bar} {n}")
 
-    # Por nivel
+
+def _print_stats_niveles(records: list[dict]) -> None:
     levels = Counter(r.get('level', '?') for r in records)
     print(f"\n{BOLD}Por nivel:{RESET}")
     for lvl in ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']:
@@ -172,34 +144,37 @@ def print_stats(records: list[dict]) -> None:
             lc = LEVEL_COLOR.get(lvl, '')
             print(f"  {lc}{lvl:<10}{RESET}  {n}")
 
-    # Latencia HTTP
+
+def _print_stats_latencia(records: list[dict]) -> None:
     http_latencies = [int(r['latency_ms']) for r in records
                       if r.get('cat') == 'HTTP' and r.get('latency_ms')]
-    if http_latencies:
-        http_latencies.sort()
-        n = len(http_latencies)
-        print(f"\n{BOLD}Latencia HTTP ({n} requests):{RESET}")
-        print(f"  p50  = {http_latencies[n//2]}ms")
-        print(f"  p95  = {http_latencies[int(n*.95)]}ms")
-        print(f"  p99  = {http_latencies[int(n*.99)]}ms")
-        print(f"  max  = {http_latencies[-1]}ms")
+    if not http_latencies:
+        return
+    http_latencies.sort()
+    n = len(http_latencies)
+    print(f"\n{BOLD}Latencia HTTP ({n} requests):{RESET}")
+    print(f"  p50  = {http_latencies[n//2]}ms")
+    print(f"  p95  = {http_latencies[int(n*.95)]}ms")
+    print(f"  p99  = {http_latencies[int(n*.99)]}ms")
+    print(f"  max  = {http_latencies[-1]}ms")
 
-    # Top errores
+
+def _print_stats_errores(records: list[dict]) -> None:
     errors = [r for r in records if r.get('level') in ('ERROR', 'CRITICAL')]
-    if errors:
-        print(f"\n{BOLD}{RED}Top errores ({len(errors)}):{RESET}")
-        ops = Counter(r.get('op', '?') for r in errors)
-        for op, n in ops.most_common(10):
-            print(f"  {RED}{n:4}x{RESET}  {op}")
+    if not errors:
+        return
+    print(f"\n{BOLD}{RED}Top errores ({len(errors)}):{RESET}")
+    ops = Counter(r.get('op', '?') for r in errors)
+    for op, n in ops.most_common(10):
+        print(f"  {RED}{n:4}x{RESET}  {op}")
 
-    # Top usuarios
+
+def _print_stats_usuarios_e_ips(records: list[dict]) -> None:
     users = Counter(r['user'] for r in records if r.get('user'))
     if users:
         print(f"\n{BOLD}Top usuarios ({len(users)} únicos):{RESET}")
         for u, n in users.most_common(5):
             print(f"  {CYAN}{n:4}x{RESET}  {u}")
-
-    # IPs sospechosas (muchos 401/403)
     sec_ips = Counter(r.get('ip', '?') for r in records
                       if r.get('cat') == 'SEC' and r.get('ip'))
     if sec_ips:
@@ -207,13 +182,28 @@ def print_stats(records: list[dict]) -> None:
         for ip, n in sec_ips.most_common(5):
             print(f"  {RED}{n:4}x{RESET}  {ip}")
 
-    # Documentos analizados
+
+def _print_stats_documentos(records: list[dict]) -> None:
     docs = [r for r in records if r.get('cat') == 'DOC']
-    if docs:
-        ops_doc = Counter(r.get('op', '?') for r in docs)
-        print(f"\n{BOLD}Documentos:{RESET}")
-        for op, n in ops_doc.most_common():
-            print(f"  {YELLOW}{n:4}x{RESET}  {op}")
+    if not docs:
+        return
+    ops_doc = Counter(r.get('op', '?') for r in docs)
+    print(f"\n{BOLD}Documentos:{RESET}")
+    for op, n in ops_doc.most_common():
+        print(f"  {YELLOW}{n:4}x{RESET}  {op}")
+
+
+def print_stats(records: list[dict]) -> None:
+    print(f"\n{BOLD}{'═'*60}{RESET}")
+    print(f"{BOLD}  ESTADÍSTICAS — {len(records)} eventos{RESET}")
+    print(f"{BOLD}{'═'*60}{RESET}\n")
+
+    _print_stats_categorias(records)
+    _print_stats_niveles(records)
+    _print_stats_latencia(records)
+    _print_stats_errores(records)
+    _print_stats_usuarios_e_ips(records)
+    _print_stats_documentos(records)
 
     print(f"\n{BOLD}{'═'*60}{RESET}\n")
 
@@ -238,10 +228,10 @@ def main():
     args = parser.parse_args()
 
     min_level = LEVEL_ORDER.get(args.min_level.upper(), 0)
-    cats_filter = set(c.upper() for c in args.cat) if args.cat else None
+    cats_filter = {c.upper() for c in args.cat} if args.cat else None
 
     if args.no_color:
-        # Desactivar todos los colores
+
         global RESET, BOLD, DIM, RED, YELLOW, GREEN, CYAN, BLUE, MAGENTA, WHITE, GRAY
         RESET = BOLD = DIM = RED = YELLOW = GREEN = CYAN = BLUE = MAGENTA = WHITE = GRAY = ''
         for k in LEVEL_COLOR: LEVEL_COLOR[k] = ''
@@ -259,11 +249,11 @@ def main():
             try:
                 d = json.loads(line)
             except json.JSONDecodeError:
-                # Línea no-JSON (arranque del proceso, etc.)
+
                 print(f"{GRAY}{line}{RESET}")
                 continue
 
-            # Filtros
+
             level_num = LEVEL_ORDER.get(d.get('level', 'INFO'), 1)
             if level_num < min_level:
                 continue

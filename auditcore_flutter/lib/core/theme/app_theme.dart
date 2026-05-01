@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-// ── Paleta de colores ────────────────────────────────────────────────────
+
 class AppColors {
-  // Primarios
+
   static const sidebar     = Color(0xFF0F172A);
   static const sidebarHov  = Color(0xFF1E293B);
   static const sidebarAct  = Color(0x403B82F6);
@@ -11,13 +11,13 @@ class AppColors {
   static const accentLight = Color(0xFFEFF6FF);
   static const accentDark  = Color(0xFF1E40AF);
 
-  // Superficies
+
   static const white   = Color(0xFFFFFFFF);
   static const bg      = Color(0xFFF8FAFC);
   static const surface = Color(0xFFFFFFFF);
   static const border  = Color(0xFFE2E8F0);
 
-  // Semánticos
+
   static const success   = Color(0xFF15803D);
   static const successBg = Color(0xFFDCFCE7);
   static const warning   = Color(0xFFA16207);
@@ -27,12 +27,12 @@ class AppColors {
   static const info      = Color(0xFF1D4ED8);
   static const infoBg    = Color(0xFFEFF6FF);
 
-  // Texto
+
   static const textPrimary   = Color(0xFF0F172A);
   static const textSecondary = Color(0xFF475569);
   static const textTertiary  = Color(0xFF94A3B8);
 
-  // Aliases de compatibilidad
+
   static const navy         = Color(0xFF0F172A);
   static const blue         = Color(0xFF2563EB);
   static const sky          = Color(0xFFEFF6FF);
@@ -48,7 +48,7 @@ class AppColors {
   static const infoLight    = Color(0xFFEFF6FF);
 }
 
-// ── Extensiones de estado ────────────────────────────────────────────────
+
 extension EstadoStyle on String {
   Color get badgeColor {
     switch (toUpperCase()) {
@@ -110,7 +110,7 @@ extension EstadoStyle on String {
   Color get colorFondoEstado => badgeBg;
 }
 
-// ── Tema principal ───────────────────────────────────────────────────────
+
 class AppTheme {
   static const _borderRadius = 8.0;
   static const _borderSide   = BorderSide(color: AppColors.border, width: 0.5);
@@ -199,8 +199,7 @@ class AppTheme {
       ),
     ),
 
-    // FIX: InputDecoration completo — todos los bordes definidos para
-    // evitar null check crashes en Flutter Web con Material3.
+
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: AppColors.white,
@@ -267,7 +266,7 @@ class AppTheme {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
 
-    // Asegurar que DropdownMenu y otros widgets no tengan colores nulos
+
     dropdownMenuTheme: DropdownMenuThemeData(
       inputDecorationTheme: InputDecorationTheme(
         filled: true,

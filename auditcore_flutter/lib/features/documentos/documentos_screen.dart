@@ -41,8 +41,8 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
       nombreUsuario: usuario?.nombreCompleto ?? '',
       titulo:        'Documentos',
       showBottomNav: true,
-      // FIX: botón para subir documentos — antes no existía ninguna forma de
-      // subir documentos desde esta pantalla.
+
+
       actions: [
         IconButton(
           icon: const Icon(Icons.upload_file_outlined, size: 20),
@@ -53,7 +53,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
         const SizedBox(width: 8),
       ],
       child: Column(children: [
-        // TabBar + filtro estado
+
         Container(
           color: AppColors.white,
           child: Column(children: [
@@ -160,9 +160,8 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis),
                         ],
-                        // Acciones según rol
-                        // FIX: estados reales del modelo son PENDIENTE, RECIBIDO, APROBADO, RECHAZADO, VENCIDO
-                        // 'RECIBIDO' es el equivalente a "en revisión" — se puede aprobar/rechazar
+
+
                         if (['RECIBIDO', 'PENDIENTE'].contains(estado) &&
                             (usuario?.rol == 'SUPERVISOR' ||
                                 usuario?.rol == 'SUPERVISOR')) ...[
@@ -263,7 +262,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
   };
 }
 
-// ── Bottom sheet para subir documentos ───────────────────────────────────────
+
 class _SubirDocumentoSheet extends StatefulWidget {
   final WidgetRef ref;
   final List<dynamic> clientes;
@@ -359,7 +358,7 @@ class _SubirDocumentoSheetState extends State<_SubirDocumentoSheet> {
       ),
       child: Column(mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Handle
+
         Center(child: Container(
           width: 36, height: 4,
           margin: const EdgeInsets.only(bottom: 16),
@@ -373,7 +372,7 @@ class _SubirDocumentoSheetState extends State<_SubirDocumentoSheet> {
                 color: AppColors.textPrimary)),
         const SizedBox(height: 16),
 
-        // Expediente selector
+
         const Text('Expediente *',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
                 color: AppColors.textSecondary)),
@@ -392,7 +391,7 @@ class _SubirDocumentoSheetState extends State<_SubirDocumentoSheet> {
         ),
         const SizedBox(height: 14),
 
-        // Nombre
+
         const Text('Nombre del documento *',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
                 color: AppColors.textSecondary)),
@@ -405,7 +404,7 @@ class _SubirDocumentoSheetState extends State<_SubirDocumentoSheet> {
         ),
         const SizedBox(height: 14),
 
-        // Archivo
+
         const Text('Archivo *',
             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
                 color: AppColors.textSecondary)),
@@ -438,7 +437,7 @@ class _SubirDocumentoSheetState extends State<_SubirDocumentoSheet> {
           ),
         const SizedBox(height: 20),
 
-        // Botones
+
         Row(children: [
           Expanded(child: OutlinedButton(
             onPressed: () => Navigator.pop(context),

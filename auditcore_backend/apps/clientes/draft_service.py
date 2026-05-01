@@ -1,32 +1,3 @@
-"""
-apps/clientes/draft_service.py
-===============================
-Servicio de borrador (draft) para el formulario multi-paso de creación de clientes.
-
-Flujo
------
-  Paso 1 → POST  /api/clientes/draft/           → crea draft en Redis, devuelve draft_id (UUID)
-  Paso 2 → PATCH /api/clientes/draft/{id}/      → actualiza draft en Redis
-  ...
-  Paso 6 → PATCH /api/clientes/draft/{id}/      → último parcial (contacto operativo incluido)
-           POST  /api/clientes/draft/{id}/commit/ → persiste en PostgreSQL y borra el draft
-
-¿Por qué Redis?
----------------
-El formulario tiene 6 pasos. Cada "Siguiente" antes enviaba un POST/PATCH real a PostgreSQL,
-lo que causaba IntegrityError porque la columna `direccion` (de la migración 0001 huérfana)
-era NOT NULL y el Paso 1 no la incluía. Ahora, ningún paso escribe en Postgres hasta que
-el usuario confirma el formulario completo. Redis actúa como buffer transaccional con TTL.
-
-Claves Redis
-------------
-  cliente_draft:{draft_id}        → dict JSON con los datos acumulados
-  cliente_draft_user:{user_id}    → set de draft_ids activos del usuario (para limpieza)
-
-TTL
----
-  DRAFT_TTL_SECONDS = 86400 (24 horas) — el draft expira si el usuario abandona el formulario.
-"""
 import json
 import uuid
 import logging
@@ -37,12 +8,12 @@ from django.db import transaction
 
 logger = logging.getLogger(__name__)
 
-# ── Constantes ────────────────────────────────────────────────────────────────
-DRAFT_TTL_SECONDS = 86_400          # 24 horas
+
+DRAFT_TTL_SECONDS = 86_400
 DRAFT_KEY_PREFIX  = 'cliente_draft'
 USER_DRAFTS_PREFIX = 'cliente_draft_user'
 
-# Campos que al hacer commit crean objetos relacionados (no van en Cliente directamente)
+
 CONTACTO_FIELDS = {
     'contacto_tipo', 'contacto_nombre', 'contacto_apellido', 'contacto_cargo',
     'contacto_email', 'contacto_telefono', 'contacto_departamento',
@@ -57,13 +28,9 @@ def _user_set_key(user_id) -> str:
     return f'{USER_DRAFTS_PREFIX}:{user_id}'
 
 
-# ── Operaciones de draft ──────────────────────────────────────────────────────
-
 def create_draft(user_id, initial_data: dict) -> str:
-    """
-    Crea un nuevo draft en Redis con los datos del Paso 1.
-    Retorna el draft_id (UUID string).
-    """
+
+
     draft_id = str(uuid.uuid4())
     draft = {
         'draft_id': draft_id,
@@ -72,7 +39,7 @@ def create_draft(user_id, initial_data: dict) -> str:
     }
     cache.set(_draft_key(draft_id), json.dumps(draft), timeout=DRAFT_TTL_SECONDS)
 
-    # Registrar el draft en el set del usuario (para poder listar/limpiar)
+
     user_key = _user_set_key(user_id)
     existing = cache.get(user_key)
     draft_ids = json.loads(existing) if existing else []
@@ -84,9 +51,8 @@ def create_draft(user_id, initial_data: dict) -> str:
 
 
 def get_draft(draft_id: str, user_id=None) -> Optional[dict]:
-    """
-    Recupera el draft. Retorna None si no existe o si el user_id no coincide.
-    """
+
+
     raw = cache.get(_draft_key(draft_id))
     if not raw:
         return None
@@ -98,10 +64,8 @@ def get_draft(draft_id: str, user_id=None) -> Optional[dict]:
 
 
 def update_draft(draft_id: str, user_id, partial_data: dict) -> Optional[dict]:
-    """
-    Hace un merge del partial_data sobre los datos existentes del draft.
-    Renueva el TTL. Retorna el draft actualizado o None si no existe / acceso denegado.
-    """
+
+
     draft = get_draft(draft_id, user_id)
     if draft is None:
         return None
@@ -113,9 +77,8 @@ def update_draft(draft_id: str, user_id, partial_data: dict) -> Optional[dict]:
 
 
 def delete_draft(draft_id: str, user_id=None) -> bool:
-    """
-    Elimina el draft de Redis. Retorna True si existía.
-    """
+
+
     if not get_draft(draft_id, user_id):
         return False
     cache.delete(_draft_key(draft_id))
@@ -123,21 +86,53 @@ def delete_draft(draft_id: str, user_id=None) -> bool:
     return True
 
 
-# ── Commit a PostgreSQL ───────────────────────────────────────────────────────
+_STR_BLANK_FIELDS = [
+    'digito_verificacion', 'matricula_mercantil', 'objeto_social',
+    'codigo_ciiu', 'regimen_tributario', 'rep_legal_nombre',
+    'rep_legal_documento', 'rep_legal_tipo_doc', 'rep_legal_cargo',
+    'rep_legal_email', 'rep_legal_telefono', 'pais', 'departamento',
+    'ciudad', 'direccion_principal', 'codigo_postal', 'telefono',
+    'telefono_alt', 'email', 'sitio_web', 'linkedin', 'subsector',
+    'ingresos_anuales', 'alcance_descripcion', 'declaracion_necesidad',
+    'certificacion_previa_detalle', 'motivo_auditoria', 'urgencia',
+    'tamano', 'notas', 'duracion_empresa',
+]
+
+_CAMPOS_EXCLUIDOS = {'creado_por', 'asesor_responsable'}
+
+
+def _normalizar_data(data: dict) -> None:
+
+    for field in _STR_BLANK_FIELDS:
+        if field not in data or data[field] is None:
+            data[field] = ''
+    for jfield in ('normas_interes', 'tipos_auditoria_solicitados', 'sedes_adicionales'):
+        if jfield not in data:
+            data[jfield] = []
+    data.setdefault('responsable_iva', True)
+    data.setdefault('tiene_certificacion_previa', False)
+    if 'num_empleados' in data and data['num_empleados'] == '':
+        data['num_empleados'] = None
+    for dfield in ('fecha_constitucion', 'fecha_limite_deseada'):
+        if data.get(dfield) == '':
+            data[dfield] = None
+
+
+def _limpiar_data_para_cliente(data: dict, cliente_model) -> dict:
+
+    cliente_field_names = (
+        {f.name for f in cliente_model._meta.concrete_fields}
+        | {f.name for f in cliente_model._meta.many_to_many}
+    )
+    return {
+        k: v for k, v in data.items()
+        if k in cliente_field_names and k not in _CAMPOS_EXCLUIDOS
+    }
+
 
 def commit_draft(draft_id: str, user_id) -> dict:
-    """
-    Persiste el draft en PostgreSQL dentro de una transacción atómica.
-    Elimina el draft de Redis si el commit es exitoso.
 
-    Retorna un dict con:
-      - 'cliente': instancia del Cliente creado
-      - 'contacto': instancia del ContactoCliente (o None)
-      - 'warnings': lista de advertencias no fatales
 
-    Lanza ValueError si el draft no existe o no pertenece al usuario.
-    Lanza cualquier excepción de Django/DRF en caso de error de validación o BD.
-    """
     from apps.clientes.models import Cliente, ContactoCliente
 
     draft = get_draft(draft_id, user_id)
@@ -147,79 +142,28 @@ def commit_draft(draft_id: str, user_id) -> dict:
     data = draft['data'].copy()
     warnings = []
 
-    # ── Separar campos de contacto operativo ─────────────────────────────────
+
     contacto_data = {}
-    for field in list(data.keys()):
+    for field in tuple(data):
         if field in CONTACTO_FIELDS:
             contacto_data[field] = data.pop(field)
 
     with transaction.atomic():
-        # ── Crear el Cliente ──────────────────────────────────────────────────
-        # Campos que podrían llegar vacíos desde el formulario y que el modelo
-        # acepta como blank pero PostgreSQL espera cadena vacía (no None).
-        str_blank_fields = [
-            'digito_verificacion', 'matricula_mercantil', 'objeto_social',
-            'codigo_ciiu', 'regimen_tributario', 'rep_legal_nombre',
-            'rep_legal_documento', 'rep_legal_tipo_doc', 'rep_legal_cargo',
-            'rep_legal_email', 'rep_legal_telefono', 'pais', 'departamento',
-            'ciudad', 'direccion_principal', 'codigo_postal', 'telefono',
-            'telefono_alt', 'email', 'sitio_web', 'linkedin', 'subsector',
-            'ingresos_anuales', 'alcance_descripcion', 'declaracion_necesidad',
-            'certificacion_previa_detalle', 'motivo_auditoria', 'urgencia',
-            'tamano', 'notas',
-            # Campos faltantes en la lista original:
-            'duracion_empresa', 'rep_legal_tipo_doc',
-        ]
-        for field in str_blank_fields:
-            if field not in data:
-                data[field] = ''
-            elif data[field] is None:
-                data[field] = ''
 
-        # Campos JSON con default de lista
-        for jfield in ('normas_interes', 'tipos_auditoria_solicitados', 'sedes_adicionales'):
-            if jfield not in data:
-                data[jfield] = []
-
-        # Campos booleanos
-        data.setdefault('responsable_iva', True)
-        data.setdefault('tiene_certificacion_previa', False)
-
-        # Campos numéricos
-        if 'num_empleados' in data and data['num_empleados'] == '':
-            data['num_empleados'] = None
-
-        # Campos de fecha
-        for dfield in ('fecha_constitucion', 'fecha_limite_deseada'):
-            if data.get(dfield) == '':
-                data[dfield] = None
-
-        # Eliminar campos que no pertenecen al modelo Cliente.
-        # IMPORTANTE: usar concrete_fields (columnas reales) + many_to_many en lugar de
-        # get_fields(), que también devuelve relaciones inversas (contactos, sedes, etc.)
-        # con nombres que podrían colisionar con claves del draft y causar TypeError en create().
-        cliente_field_names = (
-            {f.name for f in Cliente._meta.concrete_fields}
-            | {f.name for f in Cliente._meta.many_to_many}
-        )
-        # Excluir campos FK que se manejan por separado o no deben venir del formulario
-        _CAMPOS_EXCLUIDOS = {'creado_por', 'asesor_responsable'}
-        data_clean = {
-            k: v for k, v in data.items()
-            if k in cliente_field_names and k not in _CAMPOS_EXCLUIDOS
-        }
+        _normalizar_data(data)
+        data_clean = _limpiar_data_para_cliente(data, Cliente)
 
         from django.contrib.auth import get_user_model
-        User = get_user_model()
+        user_model = get_user_model()
         try:
-            creado_por = User.objects.get(pk=user_id)
-        except User.DoesNotExist:
+            creado_por = user_model.objects.get(pk=user_id)
+        except user_model.DoesNotExist:
             creado_por = None
 
         cliente = Cliente.objects.create(creado_por=creado_por, **data_clean)
         logger.info('Cliente creado desde draft %s → id=%s', draft_id, cliente.pk)
 
-        # ── Crear ContactoCliente (si hay datos) ──────────────────────────────
+
         contacto = None
         nombre   = contacto_data.get('contacto_nombre', '').strip()
         email_c  = contacto_data.get('contacto_email', '').strip()
@@ -246,7 +190,7 @@ def commit_draft(draft_id: str, user_id) -> dict:
         else:
             warnings.append('Contacto operativo omitido (nombre o email vacíos).')
 
-    # ── Limpiar draft de Redis (fuera de la transacción atómica) ─────────────
+
     delete_draft(draft_id, user_id)
 
     return {

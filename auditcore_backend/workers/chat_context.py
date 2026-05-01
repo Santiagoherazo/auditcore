@@ -1,46 +1,17 @@
-"""
-workers/chat_context.py — Caché de contexto del chatbot en Redis.
-
-PROBLEMA ORIGINAL:
-  _construir_sistema() en workers/chatbot.py hacía 6 queries directas a
-  Postgres por cada mensaje: hallazgos críticos, mayores, documentos pendientes,
-  fases completadas, total de fases, datos del cliente. En cargas altas esto
-  acumulaba decenas de queries por minuto innecesarias.
-
-SOLUCIÓN — sistema híbrido Postgres + Redis:
-  - Redis almacena snapshots JSON de los datos clave con TTL de 5 minutos.
-  - Las señales de Django (post_save en Expediente, Hallazgo, etc.) invalidan
-    el cache inmediatamente cuando hay cambios reales.
-  - El chatbot lee de Redis en O(1) en lugar de N queries a Postgres.
-  - Si Redis falla, cae silenciosamente a Postgres (modo degradado sin crash).
-
-Flujo de datos:
-  Postgres (fuente de verdad)
-      ↓ señales Django (post_save)
-  Redis (cache, TTL 5min)          ← chatbot worker lee de aquí
-      ↓ miss o TTL expirado
-  Postgres (fallback)
-
-Claves Redis (prefijo auditcore:ctx:):
-  auditcore:ctx:exp:<id>           → contexto de un expediente específico
-  auditcore:ctx:user:<id>:exps     → expedientes activos de un usuario
-  auditcore:ctx:global:stats       → KPIs globales para ADMIN
-  auditcore:ctx:certs:por_vencer   → certificaciones que vencen en ≤30 días
-"""
 import json
 import logging
 
 logger = logging.getLogger(__name__)
 
-# TTL en segundos para cada tipo de dato
-_TTL_EXPEDIENTE  = 300   # 5 min — se invalida por señal en cambios reales
-_TTL_USER_EXPS   = 180   # 3 min — lista de expedientes del usuario
-_TTL_GLOBAL      = 600   # 10 min — stats globales (menos volátiles)
-_TTL_CERTS       = 900   # 15 min — certificaciones por vencer
+
+_TTL_EXPEDIENTE  = 300
+_TTL_USER_EXPS   = 180
+_TTL_GLOBAL      = 600
+_TTL_CERTS       = 900
 
 
 def _cache():
-    """Devuelve el cliente de cache de Django. Nunca lanza excepción."""
+
     try:
         from django.core.cache import cache
         return cache
@@ -48,14 +19,9 @@ def _cache():
         return None
 
 
-# ── Expediente ─────────────────────────────────────────────────────────────────
-
 def get_contexto_expediente(expediente_id: str) -> dict | None:
-    """
-    Devuelve el contexto de un expediente desde Redis.
-    Si no está en cache, lo construye desde Postgres y lo guarda.
-    Devuelve None si el expediente no existe.
-    """
+
+
     key = f'auditcore:ctx:exp:{expediente_id}'
     c   = _cache()
 
@@ -67,7 +33,7 @@ def get_contexto_expediente(expediente_id: str) -> dict | None:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-    # Cache miss — construir desde Postgres
+
     ctx = _build_contexto_expediente(expediente_id)
     if ctx and c:
         try:
@@ -78,7 +44,7 @@ def get_contexto_expediente(expediente_id: str) -> dict | None:
 
 
 def invalidar_expediente(expediente_id: str) -> None:
-    """Invalida el cache de un expediente (llamado desde señales Django)."""
+
     key = f'auditcore:ctx:exp:{expediente_id}'
     c   = _cache()
     if c:
@@ -89,7 +55,7 @@ def invalidar_expediente(expediente_id: str) -> None:
 
 
 def _build_contexto_expediente(expediente_id: str) -> dict | None:
-    """Construye el contexto desde Postgres. Todas las queries en una sola función."""
+
     try:
         from apps.expedientes.models import Expediente
         exp = Expediente.objects.select_related(
@@ -124,13 +90,9 @@ def _build_contexto_expediente(expediente_id: str) -> dict | None:
         return None
 
 
-# ── Expedientes activos de un usuario ─────────────────────────────────────────
-
 def get_expedientes_usuario(usuario_id: str, rol: str) -> list[dict]:
-    """
-    Expedientes activos visibles para un usuario según su rol.
-    Cached en Redis por usuario_id.
-    """
+
+
     key = f'auditcore:ctx:user:{usuario_id}:exps'
     c   = _cache()
 
@@ -168,10 +130,10 @@ def _build_expedientes_usuario(usuario_id: str, rol: str) -> list[dict]:
         qs = Expediente.objects.select_related('cliente', 'tipo_auditoria')
 
         if rol == 'SUPERVISOR':
-            # Supervisor ve todos los expedientes activos
+
             qs = qs.filter(estado__in=['ACTIVO', 'EN_EJECUCION'])
         elif rol == 'AUDITOR':
-            # Auditor ve expedientes donde es líder O donde está en el equipo
+
             qs = qs.filter(
                 Q(auditor_lider_id=usuario_id) |
                 Q(equipo__usuario_id=usuario_id, equipo__activo=True),
@@ -183,7 +145,7 @@ def _build_expedientes_usuario(usuario_id: str, rol: str) -> list[dict]:
                 estado__in=['ACTIVO', 'EN_EJECUCION'],
             )
         elif rol in ('AUXILIAR', 'REVISOR'):
-            # Auxiliar y Revisor ven solo los expedientes donde están en el equipo
+
             qs = qs.filter(
                 equipo__usuario_id=usuario_id,
                 equipo__activo=True,
@@ -207,8 +169,6 @@ def _build_expedientes_usuario(usuario_id: str, rol: str) -> list[dict]:
         logger.warning('_build_expedientes_usuario %s: %s', usuario_id, e)
         return []
 
-
-# ── Stats globales (ADMIN) ────────────────────────────────────────────────────
 
 def get_stats_globales() -> dict:
     key = 'auditcore:ctx:global:stats'
@@ -253,8 +213,6 @@ def _build_stats_globales() -> dict:
         logger.warning('_build_stats_globales: %s', e)
         return {}
 
-
-# ── Certificaciones por vencer ────────────────────────────────────────────────
 
 def get_certs_por_vencer(usuario_id: str | None = None) -> list[dict]:
     key = f'auditcore:ctx:certs:por_vencer:{usuario_id or "all"}'

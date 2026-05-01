@@ -6,10 +6,7 @@ import '../../core/api/api_client.dart';
 import '../../core/services/providers.dart';
 import '../../core/theme/app_theme.dart';
 
-// setupStatusProvider moved to core/services/providers.dart to avoid
-// circular dependency with the router.
 
-// ── Wizard de instalación ─────────────────────────────────────────────────
 class SetupScreen extends ConsumerStatefulWidget {
   const SetupScreen({super.key});
   @override
@@ -20,16 +17,15 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   final _pageCtrl = PageController();
   int _paso = 0;
 
-  // Paso 1
+
   final _nombreCtrl  = TextEditingController(text: 'AuditCore');
-  // FIX: en web Docker, la API se accede via proxy nginx (/api/).
-  // Si API_BASE_URL está en .env se usa ese valor; si no, se deja vacío
-  // y ApiClient usará rutas relativas automáticamente.
+
+
   final _apiUrlCtrl  = TextEditingController(
     text: ApiClient.baseUrl.isEmpty ? '' : ApiClient.baseUrl,
   );
 
-  // Paso 2
+
   final _nombreAdminCtrl   = TextEditingController();
   final _apellidoAdminCtrl = TextEditingController();
   final _emailAdminCtrl    = TextEditingController();
@@ -64,12 +60,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     setState(() { _cargando = true; _error = null; });
 
     try {
-      // FIX: si el campo URL quedó vacío (web Docker con nginx proxy),
-      // usar el ApiClient existente directamente.
+
+
       final urlIngresada = _apiUrlCtrl.text.trim().replaceAll(RegExp(r'/$'), '');
       final baseUrl = urlIngresada.isNotEmpty ? urlIngresada : ApiClient.baseUrl;
 
-      // Usar un Dio temporal con la URL configurada para el setup
+
       final apiBase = baseUrl.isEmpty ? '/api/' : '$baseUrl/api/';
       final dio = Dio(BaseOptions(
         baseUrl: apiBase,
@@ -87,8 +83,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       ApiClient.setBaseUrl(baseUrl);
 
-      // FIX: invalidar el provider para que el router detecte el cambio
-      // y redirija automáticamente a /login sin quedarse en /setup
+
       ref.invalidate(setupStatusProvider);
 
       if (mounted) {
@@ -115,7 +110,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Si la plataforma ya está configurada, mostrar aviso y redirigir
+
     final statusAsync = ref.watch(setupStatusProvider);
 
     return Scaffold(
@@ -124,7 +119,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         loading: () => const Center(
           child: CircularProgressIndicator(color: Colors.white),
         ),
-        error: (_, __) => _buildWizard(), // si falla la comprobación, mostrar wizard
+        error: (_, __) => _buildWizard(),
         data: (configured) {
           if (configured) {
             return Center(
@@ -253,7 +248,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   }
 }
 
-// ── Indicador de pasos ────────────────────────────────────────────────────
+
 class _PasoIndicador extends StatelessWidget {
   final int paso;
   const _PasoIndicador({required this.paso});
@@ -301,7 +296,7 @@ class _Dot extends StatelessWidget {
   ]);
 }
 
-// ── Paso 1 ────────────────────────────────────────────────────────────────
+
 class _Paso1 extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController nombreCtrl;
@@ -351,8 +346,8 @@ class _Paso1 extends StatelessWidget {
             helperText: 'En Docker con nginx deja vacío. Sin Docker: http://localhost:8000',
           ),
           validator: (v) {
-            // FIX: permitir campo vacío — en Docker/web la app usa rutas relativas
-            // a través del proxy nginx. Solo validar si se ingresó algo.
+
+
             if (v != null && v.trim().isNotEmpty && !v.startsWith('http')) {
               return 'Debe empezar con http:// o https://';
             }
@@ -380,7 +375,7 @@ class _Paso1 extends StatelessWidget {
   }
 }
 
-// ── Paso 2 ────────────────────────────────────────────────────────────────
+
 class _Paso2 extends StatelessWidget {
   final GlobalKey<FormState> formKey;
   final TextEditingController nombreCtrl, apellidoCtrl, emailCtrl, passCtrl, passConfCtrl;

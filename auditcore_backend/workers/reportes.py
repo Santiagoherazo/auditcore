@@ -8,18 +8,15 @@ logger = logging.getLogger(__name__)
 try:
     from adapters.realtime.chatbot_logger import ids_log, IDS
 except ImportError:
-    def ids_log(*a, **kw): pass  # type: ignore[misc]
+    def ids_log(*a, **kw): pass
     class IDS:
         TASK='TASK'; ERROR='ERROR'
 
 
 @shared_task(queue='reportes', bind=True, max_retries=2)
 def generar_informe_pdf(self, certificacion_id):
-    """
-    Genera el PDF de certificación usando WeasyPrint.
-    Guarda el archivo en media/certificados/ y actualiza el modelo.
-    Solo reintenta en errores transitorios (IO, red); no en errores de template.
-    """
+
+
     from apps.certificaciones.models import Certificacion
 
     ids_log(IDS.TASK, msg='generar_pdf_start', cert_id=str(certificacion_id))
@@ -51,7 +48,7 @@ def generar_informe_pdf(self, certificacion_id):
         return str(ruta_relativa)
 
     except (RuntimeError, ImportError) as exc:
-        # Errores permanentes (WeasyPrint no instalado, template roto) — no reintentar
+
         logger.error('Error permanente generando PDF %s: %s', certificacion_id, exc)
         raise
 
@@ -61,7 +58,7 @@ def generar_informe_pdf(self, certificacion_id):
 
 
 def _render_certificado_html(cert):
-    """Renderiza el template HTML del certificado con datos reales."""
+
     from django.template.loader import render_to_string
     exp = cert.expediente
 
@@ -91,7 +88,7 @@ def _render_certificado_html(cert):
 
 
 def _html_to_pdf(html_content):
-    """Convierte HTML a bytes PDF usando WeasyPrint."""
+
     try:
         from weasyprint import HTML
         from weasyprint.text.fonts import FontConfiguration
@@ -105,12 +102,12 @@ def _html_to_pdf(html_content):
 
 
 def _notificar_pdf_listo(cert):
-    """Notifica al auditor líder que el PDF está disponible para descarga."""
+
     try:
         from asgiref.sync import async_to_sync
         from channels.layers import get_channel_layer
         lider = cert.expediente.auditor_lider
-        # FIX: verificar también que el lider tiene email antes de intentar la notificación
+
         if not lider or not getattr(lider, 'id', None):
             return
         channel_layer = get_channel_layer()
@@ -129,14 +126,8 @@ def _notificar_pdf_listo(cert):
 
 @shared_task(queue='reportes')
 def generar_reporte_excel(tipo, filtros=None):
-    """
-    Genera reportes Excel según el tipo solicitado.
-    tipos: 'expedientes', 'hallazgos', 'certificaciones', 'clientes'
-    Retorna la ruta relativa del archivo generado.
 
-    filtros puede incluir '_user_id' para enviar notificación WS al usuario
-    cuando el reporte esté listo.
-    """
+
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from django.utils import timezone
@@ -144,8 +135,7 @@ def generar_reporte_excel(tipo, filtros=None):
     ids_log(IDS.TASK, msg='generar_excel_start', tipo=tipo)
     filtros = filtros or {}
 
-    # FIX: extraer _user_id antes de pasarlo a las funciones de Excel
-    # para no contaminar los filtros de negocio con metadatos internos.
+
     user_id = filtros.pop('_user_id', None)
 
     wb = openpyxl.Workbook()
@@ -186,9 +176,7 @@ def generar_reporte_excel(tipo, filtros=None):
     ids_log(IDS.TASK, msg='generar_excel_ok', tipo=tipo, nombre=nombre)
     logger.info('Reporte Excel generado: %s', ruta)
 
-    # FIX: notificar al usuario vía WebSocket cuando el reporte esté listo.
-    # Antes el frontend recibía un task_id sin ninguna forma de saber cuándo
-    # estaba disponible (no había endpoint de polling ni notificación WS).
+
     if user_id:
         try:
             from asgiref.sync import async_to_sync

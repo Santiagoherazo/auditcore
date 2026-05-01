@@ -19,6 +19,9 @@ router.register('clientes',               views.ClienteViewSet,               ba
 router.register('clientes-sedes',         views.SedeClienteViewSet,          basename='sede-cliente')
 router.register('clientes-contactos',     views.ContactoClienteViewSet,      basename='contacto-cliente')
 router.register('tipos-auditoria',        views.TipoAuditoriaViewSet,        basename='tipo-auditoria')
+router.register('tipos-auditoria-fases',  views.FaseTipoAuditoriaViewSet,    basename='fase-tipo-auditoria')
+router.register('tipos-auditoria-checklist', views.ChecklistItemViewSet,     basename='checklist-item')
+router.register('tipos-auditoria-documentos', views.DocumentoRequeridoViewSet, basename='documento-requerido')
 router.register('formularios/esquemas',   views.EsquemaFormularioViewSet,    basename='esquema')
 router.register('formularios/valores',    views.ValorFormularioViewSet,      basename='valor')
 router.register('expedientes',            views.ExpedienteViewSet,            basename='expediente')
@@ -31,7 +34,7 @@ router.register('chatbot/conversaciones', views.ConversacionViewSet,          ba
 router.register('visitas',                views.VisitaAgendadaViewSet,        basename='visita')
 
 urlpatterns = [
-    # Auth — AC-02, AC-03, AC-04, AC-05
+
     path('auth/login/',          LoginView.as_view(),                name='login'),
     path('auth/refresh/',        TokenRefreshView.as_view(),         name='token-refresh'),
     path('auth/logout/',         TokenBlacklistView.as_view(),       name='token-blacklist'),
@@ -39,40 +42,40 @@ urlpatterns = [
     path('auth/password-reset/', PasswordResetRequestView.as_view(), name='password-reset-request'),
     path('auth/password-reset/confirm/', PasswordResetConfirmView.as_view(), name='password-reset-confirm'),
 
-    # Setup inicial — wizard de instalación (se bloquea tras el primer uso)
+
     path('auth/setup/',        SetupView.as_view(),       name='setup'),
     path('auth/setup/status/', SetupStatusView.as_view(), name='setup-status'),
 
-    # Draft de cliente (Redis → PostgreSQL) — formulario multi-paso
+
     path('clientes/draft/',                  ClienteDraftCreateView.as_view(),  name='cliente-draft-create'),
     path('clientes/draft/<str:draft_id>/',   ClienteDraftUpdateView.as_view(),  name='cliente-draft-update'),
     path('clientes/draft/<str:draft_id>/commit/', ClienteDraftCommitView.as_view(), name='cliente-draft-commit'),
 
-    # Router ViewSets
+
     path('', include(router.urls)),
 
-    # Chatbot status — proveedor LLM activo
+
     path('chatbot/status/', views.ChatbotStatusView.as_view(), name='chatbot-status'),
 
-    # Análisis inteligente de documentos via chatbot — AC-DOC-ANALYSIS
+
     path('chatbot/analizar-documento/', views.AnalizarDocumentoChatbotView.as_view(), name='chatbot-analizar-documento'),
 
-    # Clientes — acceso temporal caracterización
+
     path('clientes/acceso-temporal/', views.AccesoTemporalView.as_view(), name='acceso-temporal'),
     path('clientes/caracterizacion/<str:token>/', views.CaracterizacionPublicaView.as_view(), name='caracterizacion-publica'),
 
-    # Permisos efectivos del usuario autenticado
+
     path('usuarios/mis-permisos/', views.MisPermisosView.as_view(), name='mis-permisos'),
 
-    # Dashboard global — AC-61
+
     path('dashboard/', views.DashboardGlobalView.as_view(), name='dashboard'),
 
-    # Bitácora global — AC-79
+
     path('seguridad/bitacora/', views.BitacoraGlobalView.as_view(), name='bitacora-global'),
 
-    # Seed de datos demo — solo ADMIN
+
     path('administracion/seed/', views.SeedDemoView.as_view(), name='seed-demo'),
 
-    # Reportes Excel — AC-67
+
     path('reportes/exportar/', views.ExportarReporteView.as_view(), name='exportar-reporte'),
 ]

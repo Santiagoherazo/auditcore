@@ -229,9 +229,6 @@ class _TabUsuarios extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  UTILIDADES COMPARTIDAS
-// ─────────────────────────────────────────────────────────────────────────────
 
 String _parsearError(dynamic e) {
   try {
@@ -287,9 +284,6 @@ Future<bool> _confirmar(BuildContext ctx, {
   return ok == true;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  TAB EQUIPO — lista con filtros, CRUD completo, activar/desactivar/soft-delete
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _TabEquipo extends ConsumerStatefulWidget {
   final WidgetRef ref;
@@ -375,19 +369,19 @@ class _TabEquipoState extends ConsumerState<_TabEquipo> {
           return true;
         }).toList();
 
-        // Estadísticas
+
         final activos  = todos.where((u) => u['estado'] == 'ACTIVO').length;
         final inactivos = todos.length - activos;
         final externos  = todos.where((u) => u['tipo_contratacion'] == 'EXTERNO').length;
 
         return Stack(children: [
           Column(children: [
-            // ── Cabecera con stats + filtros ──────────────────────────────
+
             Container(
               color: AppColors.white,
               padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Stats row
+
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(children: [
@@ -401,7 +395,7 @@ class _TabEquipoState extends ConsumerState<_TabEquipo> {
                   ]),
                 ),
                 const SizedBox(height: 12),
-                // Búsqueda
+
                 TextField(
                   onChanged: (v) => setState(() => _busqueda = v),
                   style: const TextStyle(fontSize: 13),
@@ -413,7 +407,7 @@ class _TabEquipoState extends ConsumerState<_TabEquipo> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                // Filtros
+
                 Row(children: [
                   Expanded(child: DropdownButtonFormField<String>(
                     value: _filtroTipo,
@@ -450,7 +444,7 @@ class _TabEquipoState extends ConsumerState<_TabEquipo> {
               ]),
             ),
             const Divider(height: 1),
-            // ── Lista ─────────────────────────────────────────────────────
+
             Expanded(
               child: lista.isEmpty
                 ? const EmptyState(
@@ -471,7 +465,7 @@ class _TabEquipoState extends ConsumerState<_TabEquipo> {
                   ),
             ),
           ]),
-          // FAB
+
           Positioned(
             bottom: 16, right: 16,
             child: FloatingActionButton.extended(
@@ -488,7 +482,7 @@ class _TabEquipoState extends ConsumerState<_TabEquipo> {
   }
 }
 
-// ── Tarjeta de miembro del equipo ─────────────────────────────────────────────
+
 class _TarjetaMiembro extends StatelessWidget {
   final Map<String, dynamic> u;
   final VoidCallback onEditar, onActivar, onDesactivar, onSoftDelete;
@@ -523,7 +517,7 @@ class _TarjetaMiembro extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Fila superior: avatar + info + menú
+
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             CircleAvatar(
               radius: 22,
@@ -551,7 +545,7 @@ class _TarjetaMiembro extends StatelessWidget {
                   style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
               ],
             ])),
-            // Menú de acciones
+
             PopupMenuButton<String>(
               onSelected: (v) {
                 if (v == 'editar')     onEditar();
@@ -597,7 +591,7 @@ class _TarjetaMiembro extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 10),
-          // Badges
+
           Wrap(spacing: 6, runSpacing: 4, children: [
             _RolBadge(rol: rol),
             StatusBadge(estado: estado),
@@ -611,7 +605,7 @@ class _TarjetaMiembro extends StatelessWidget {
                 color: const Color(0xFF059669),
                 bg: const Color(0xFFECFDF5)),
           ]),
-          // Acciones rápidas de estado
+
           if (!activo) ...[
             const SizedBox(height: 10),
             SizedBox(
@@ -674,9 +668,6 @@ class _StatChip extends StatelessWidget {
     ]));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  FORMULARIO DE USUARIO — crear / editar — con validación DRF y secciones
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _UsuarioForm extends ConsumerStatefulWidget {
   final Map<String, dynamic>? usuarioExistente;
@@ -855,14 +846,14 @@ class _UsuarioFormState extends ConsumerState<_UsuarioForm> {
       child: SingleChildScrollView(child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Handle bar
+
           Center(child: Container(
             width: 36, height: 4,
             margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
               color: AppColors.gray300,
               borderRadius: BorderRadius.circular(2)))),
-          // Título
+
           Row(children: [
             Container(
               padding: const EdgeInsets.all(8),
@@ -882,7 +873,7 @@ class _UsuarioFormState extends ConsumerState<_UsuarioForm> {
               style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary)),
           ]),
 
-          // ── Sección: Acceso ──────────────────────────────────────────
+
           _seccion('Credenciales de acceso', icono: Icons.lock_outline),
           _campo('Email *', _emailCtrl,
             hint: 'usuario@empresa.com',
@@ -894,7 +885,7 @@ class _UsuarioFormState extends ConsumerState<_UsuarioForm> {
               return null;
             }),
 
-          // Contraseña
+
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -940,7 +931,7 @@ class _UsuarioFormState extends ConsumerState<_UsuarioForm> {
             ]),
           ),
 
-          // ── Sección: Datos personales ────────────────────────────────
+
           _seccion('Datos personales', icono: Icons.person_outline),
           Row(children: [
             Expanded(child: _campo('Nombre *', _nombreCtrl, hint: 'Carlos',
@@ -958,13 +949,13 @@ class _UsuarioFormState extends ConsumerState<_UsuarioForm> {
           _campo('Especialidad', _especialidadCtrl,
             hint: 'ISO 27001, NIIF, Calidad...'),
 
-          // ── Sección: Rol y contratación ──────────────────────────────
+
           _seccion('Rol y vinculación', icono: Icons.badge_outlined),
           _drop('Tipo de contratación', _tipoContratacion, _tipos,
             (v) => setState(() => _tipoContratacion = v!)),
           _drop('Rol en el sistema *', _rol, _roles,
             (v) => setState(() => _rol = v!)),
-          // Descripción del rol seleccionado
+
           Builder(builder: (_) {
             final desc = switch (_rol) {
               'SUPERVISOR' => 'Acceso total. Gestiona usuarios, configuración y todas las operaciones.',
@@ -991,7 +982,7 @@ class _UsuarioFormState extends ConsumerState<_UsuarioForm> {
           if (_esEdicion) _drop('Estado de la cuenta', _estado, _estados,
             (v) => setState(() => _estado = v!)),
 
-          // ── Error ────────────────────────────────────────────────────
+
           if (_error != null)
             Container(
               margin: const EdgeInsets.only(top: 4, bottom: 4),
@@ -1026,7 +1017,7 @@ class _UsuarioFormState extends ConsumerState<_UsuarioForm> {
   );
 }
 
-// ── Permisos por rol (espejo del backend) ─────────────────────────────────────
+
 const _permisosBackend = <String, List<String>>{
   'SUPERVISOR': [
     'usuarios.ver', 'usuarios.crear', 'usuarios.editar', 'usuarios.eliminar',
@@ -1131,7 +1122,7 @@ const _rolesInfo = <(String, Color, String)>[
   ('CLIENTE',    Color(0xFF6B7280), 'Portal externo. Acceso de solo lectura a sus propios expedientes y certificaciones.'),
 ];
 
-// ── Provider para cargar usuarios con rol/permisos_efectivos ─────────────────
+
 final _rolesUsuariosProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final resp = await ApiClient.instance.get(Endpoints.usuarios);
   final data = resp.data;
@@ -1139,7 +1130,7 @@ final _rolesUsuariosProvider = FutureProvider.autoDispose<List<Map<String, dynam
   return lista.cast<Map<String, dynamic>>();
 });
 
-// ── Tab de Roles y Permisos — completamente dinámico ─────────────────────────
+
 class _TabRolesPermisos extends ConsumerStatefulWidget {
   const _TabRolesPermisos();
   @override
@@ -1198,9 +1189,8 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
   @override
   Widget build(BuildContext context) {
     return Column(children: [
-      // Usamos tabs manuales en lugar de TabBar+TabBarView anidado
-      // porque Flutter no permite TabBarView dentro de otro TabBarView
-      // sin altura fija (causa layout overflow / pantalla en blanco).
+
+
       Container(
         color: AppColors.white,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -1231,14 +1221,14 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
     ]);
   }
 
-  // ── Sub-pestaña 1: Matriz de roles ────────────────────────────────────────
+
   Widget _buildMatrizRoles() {
     final rolesKeys = _rolesInfo.map((r) => r.$1).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Selector de rol para ver su detalle
+
         const Text('Selecciona un rol para ver sus permisos',
             style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                 color: AppColors.textPrimary)),
@@ -1270,7 +1260,7 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
 
         if (_rolSeleccionado != null) ...[
           const SizedBox(height: 20),
-          // Card de descripción del rol
+
           Builder(builder: (_) {
             final info = _rolesInfo.firstWhere((r) => r.$1 == _rolSeleccionado);
             return Card(
@@ -1304,7 +1294,7 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
               style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
                   color: AppColors.textSecondary)),
           const SizedBox(height: 8),
-          // Grid de permisos del rol seleccionado
+
           Builder(builder: (_) {
             final perms = _permisosDelRol(_rolSeleccionado!);
             final grupos = <String, List<(String, String, IconData)>>{};
@@ -1368,7 +1358,7 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
           }),
 
           const SizedBox(height: 20),
-          // Comparativa de todos los roles
+
           const Text('Comparativa de todos los roles',
               style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                   color: AppColors.textPrimary)),
@@ -1420,12 +1410,12 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
     );
   }
 
-  // ── Sub-pestaña 2: Permisos adicionales por usuario ───────────────────────
+
   Widget _buildPermisosUsuarios() {
     final asyncUsuarios = ref.watch(_rolesUsuariosProvider);
 
     if (_usuarioEditandoId != null) {
-      // Editor de permisos extra
+
       return asyncUsuarios.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => EmptyState(titulo: 'Error', subtitulo: e.toString(),
@@ -1481,7 +1471,7 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
               ),
               const SizedBox(height: 16),
 
-              // Lista de todos los permisos con toggle
+
               ...() {
                 final grupos = <String, List<(String, String, IconData)>>{};
                 for (final p in _todosLosPermisos) {
@@ -1592,7 +1582,7 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
       );
     }
 
-    // Lista de usuarios
+
     return asyncUsuarios.when(
       loading: () => const Center(child: SizedBox(width: 24, height: 24,
           child: CircularProgressIndicator(strokeWidth: 2))),
@@ -1719,7 +1709,7 @@ class _TabRolesPermisosState extends ConsumerState<_TabRolesPermisos> {
   };
 }
 
-// ── Sub-tab chip para la sección de Roles ────────────────────────────────────
+
 class _SubTab extends StatelessWidget {
   final String label;
   final bool activo;
@@ -1747,44 +1737,1230 @@ class _SubTab extends StatelessWidget {
   );
 }
 
-class _TabTiposAuditoria extends StatelessWidget {
+
+class _TabTiposAuditoria extends ConsumerStatefulWidget {
   final WidgetRef ref;
   const _TabTiposAuditoria({required this.ref});
+  @override
+  ConsumerState<_TabTiposAuditoria> createState() => _TabTiposAuditoriaState();
+}
+
+class _TabTiposAuditoriaState extends ConsumerState<_TabTiposAuditoria> {
+  String _busqueda = '';
+  bool _soloActivos = true;
+  bool _cargandoSeed = false;
+
+  Future<void> _cargarSeed() async {
+    final ok = await _confirmar(context,
+      titulo: '¿Cargar tipos de demostración?',
+      mensaje: 'Se crearán ISO 27001, ISO 9001, SOC 2 e ISO 45001 con sus fases, '
+               'checklist y documentos. Los que ya existan no se modificarán.',
+      labelOk: 'Cargar',
+      colorOk: AppColors.accent,
+    );
+    if (!ok || !mounted) return;
+    setState(() => _cargandoSeed = true);
+    try {
+      final resp = await ApiClient.instance.post(Endpoints.administracionSeed);
+      widget.ref.invalidate(tiposAuditoriaAdminProvider);
+      if (mounted) _snack(context, (resp.data['detail'] as String?) ?? 'Datos cargados.');
+    } catch (e) {
+      if (mounted) _snack(context, _parsearError(e), error: true);
+    } finally {
+      if (mounted) setState(() => _cargandoSeed = false);
+    }
+  }
+
+  void _abrirForm({Map<String, dynamic>? tipo}) => showModalBottomSheet(
+    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+    builder: (_) => _TipoAuditoriaForm(ref: widget.ref, tipo: tipo))
+    .then((_) => widget.ref.invalidate(tiposAuditoriaAdminProvider));
+
+  void _verDetalle(Map<String, dynamic> tipo) => showModalBottomSheet(
+    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+    builder: (_) => _TipoAuditoriaDetalle(ref: widget.ref, tipo: tipo))
+    .then((_) => widget.ref.invalidate(tiposAuditoriaAdminProvider));
+
+  Future<void> _toggleActivo(Map<String, dynamic> tipo) async {
+    final activo = tipo['activo'] as bool? ?? true;
+    final nombre = tipo['nombre'] as String? ?? '';
+    final ok = await _confirmar(context,
+      titulo: activo ? '¿Desactivar tipo?' : '¿Activar tipo?',
+      mensaje: activo
+        ? '$nombre dejará de aparecer en el formulario de clientes.'
+        : '$nombre volverá a estar disponible para selección.',
+      labelOk: activo ? 'Desactivar' : 'Activar',
+      colorOk: activo ? AppColors.danger : AppColors.success);
+    if (!ok || !mounted) return;
+    try {
+      await ApiClient.instance.patch(
+        Endpoints.tipoAuditoria(tipo['id'] as String),
+        data: {'activo': !activo});
+      widget.ref.invalidate(tiposAuditoriaAdminProvider);
+      if (mounted) _snack(context, activo ? 'Tipo desactivado.' : 'Tipo activado.');
+    } catch (e) {
+      if (mounted) _snack(context, _parsearError(e), error: true);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final async = ref.watch(tiposAuditoriaAdminProvider);
+    final async = widget.ref.watch(tiposAuditoriaAdminProvider);
     return async.when(
       loading: () => const Center(child: SizedBox(width: 24, height: 24,
           child: CircularProgressIndicator(strokeWidth: 2))),
       error: (e, _) => EmptyState(titulo: 'Error', subtitulo: e.toString(),
           icono: Icons.error_outline, labelBoton: 'Reintentar',
-          onBoton: () => ref.invalidate(tiposAuditoriaAdminProvider)),
-      data: (tipos) => tipos.isEmpty
-        ? const EmptyState(titulo: 'Sin tipos de auditoría',
-            subtitulo: 'Configura los tipos con el seed de datos.',
-            icono: Icons.assignment_outlined)
-        : ListView.separated(
-            padding: const EdgeInsets.all(14), itemCount: tipos.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 6),
-            itemBuilder: (_, i) {
-              final t = tipos[i];
-              return Card(child: Padding(padding: const EdgeInsets.all(14),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(child: Text('${t['codigo']} — ${t['nombre']}',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-                    StatusBadge(estado: (t['activo'] as bool? ?? true) ? 'ACTIVO' : 'INACTIVO'),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text('Nivel: ${t['nivel'] ?? '—'}  ·  '
-                      '${(t['fases'] as List? ?? []).length} fases  ·  '
-                      '${(t['checklist_items'] as List? ?? []).length} checklist',
-                      style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
-                ])));
-            }));
+          onBoton: () => widget.ref.invalidate(tiposAuditoriaAdminProvider)),
+      data: (todos) {
+
+        final lista = todos.where((t) {
+          final activo = t['activo'] as bool? ?? true;
+          final nombre = '${t['nombre'] ?? ''} ${t['codigo'] ?? ''}'.toLowerCase();
+          if (_soloActivos && !activo) return false;
+          if (_busqueda.isNotEmpty && !nombre.contains(_busqueda.toLowerCase())) return false;
+          return true;
+        }).toList();
+
+        final totalActivos = todos.where((t) => t['activo'] == true).length;
+        final totalInactivos = todos.length - totalActivos;
+
+        return Stack(children: [
+          Column(children: [
+
+            Container(
+              color: AppColors.white,
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  _StatChip(label: 'Total',    valor: '${todos.length}', color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  _StatChip(label: 'Activos',  valor: '$totalActivos',   color: const Color(0xFF059669)),
+                  const SizedBox(width: 8),
+                  _StatChip(label: 'Inactivos',valor: '$totalInactivos', color: AppColors.textTertiary),
+                ]),
+                const SizedBox(height: 12),
+                TextField(
+                  onChanged: (v) => setState(() => _busqueda = v),
+                  style: const TextStyle(fontSize: 13),
+                  decoration: const InputDecoration(
+                    hintText: 'Buscar por nombre o código...',
+                    prefixIcon: Icon(Icons.search, size: 18, color: AppColors.textTertiary),
+                    contentPadding: EdgeInsets.symmetric(vertical: 8),
+                    isDense: true)),
+                const SizedBox(height: 8),
+                Row(children: [
+                  Switch(
+                    value: _soloActivos,
+                    onChanged: (v) => setState(() => _soloActivos = v),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                  const SizedBox(width: 6),
+                  const Text('Solo activos', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                ]),
+              ]),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: lista.isEmpty
+                ? EmptyState(
+                    titulo: 'Sin tipos de auditoría',
+                    subtitulo: todos.isEmpty
+                        ? 'Crea el primer tipo para comenzar.'
+                        : 'No hay resultados con los filtros actuales.',
+                    icono: Icons.assignment_outlined,
+                    labelBoton: 'Crear tipo',
+                    onBoton: () => _abrirForm())
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 88),
+                    itemCount: lista.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (_, i) => _TarjetaTipoAuditoria(
+                      tipo: lista[i],
+                      onEditar:  () => _abrirForm(tipo: lista[i]),
+                      onDetalle: () => _verDetalle(lista[i]),
+                      onToggle:  () => _toggleActivo(lista[i]),
+                    )),
+            ),
+          ]),
+          Positioned(bottom: 16, right: 16,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+
+              if (todos.isEmpty) ...[
+                FloatingActionButton.small(
+                  heroTag: 'fab_seed_tipos',
+                  onPressed: _cargandoSeed ? null : _cargarSeed,
+                  backgroundColor: const Color(0xFF7C3AED),
+                  foregroundColor: Colors.white,
+                  tooltip: 'Cargar datos de demostración',
+                  child: _cargandoSeed
+                    ? const SizedBox(width: 18, height: 18,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Icon(Icons.auto_awesome_outlined, size: 18)),
+                const SizedBox(height: 10),
+              ],
+              FloatingActionButton.extended(
+                heroTag: 'fab_tipos',
+                onPressed: () => _abrirForm(),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Nuevo tipo'),
+                backgroundColor: AppColors.accent, foregroundColor: Colors.white),
+            ])),
+        ]);
+      },
+    );
   }
 }
+
+
+class _TarjetaTipoAuditoria extends StatelessWidget {
+  final Map<String, dynamic> tipo;
+  final VoidCallback onEditar, onDetalle, onToggle;
+  const _TarjetaTipoAuditoria({
+    required this.tipo, required this.onEditar,
+    required this.onDetalle, required this.onToggle});
+
+  @override
+  Widget build(BuildContext context) {
+    final activo   = tipo['activo'] as bool? ?? true;
+    final codigo   = tipo['codigo'] as String? ?? '';
+    final nombre   = tipo['nombre'] as String? ?? '';
+    final nivel    = tipo['nivel'] as String? ?? '';
+    final cat      = tipo['categoria'] as String? ?? '';
+    final fases    = (tipo['fases'] as List? ?? []).length;
+    final checks   = (tipo['checklist_items'] as List? ?? []).length;
+    final docs     = (tipo['documentos_requeridos'] as List? ?? []).length;
+    final dias     = tipo['duracion_estimada_dias'] as int? ?? 0;
+    final certTipo = tipo['certificacion_tipo'] as String? ?? '';
+
+    final catColor = switch (cat) {
+      'SEGURIDAD'   => const Color(0xFF0369A1),
+      'CALIDAD'     => const Color(0xFF059669),
+      'AMBIENTAL'   => const Color(0xFF15803D),
+      'FINANCIERO'  => const Color(0xFFB45309),
+      _             => AppColors.textTertiary,
+    };
+
+    return Card(
+      elevation: activo ? 1 : 0,
+      color: activo ? AppColors.white : AppColors.gray100,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: activo ? AppColors.border : AppColors.gray300)),
+      child: InkWell(
+        onTap: onDetalle,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: catColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(6)),
+                child: Text(codigo,
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: catColor))),
+              const SizedBox(width: 8),
+              Expanded(child: Text(nombre,
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                    color: activo ? AppColors.textPrimary : AppColors.textTertiary))),
+              PopupMenuButton<String>(
+                onSelected: (v) {
+                  if (v == 'editar')  onEditar();
+                  else if (v == 'detalle') onDetalle();
+                  else if (v == 'toggle')  onToggle();
+                },
+                icon: const Icon(Icons.more_vert, size: 18, color: AppColors.textTertiary),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                itemBuilder: (_) => [
+                  PopupMenuItem(value: 'detalle', child: Row(children: const [
+                    Icon(Icons.visibility_outlined, size: 15, color: AppColors.accent),
+                    SizedBox(width: 8), Text('Ver fases y checklist', style: TextStyle(fontSize: 13))])),
+                  PopupMenuItem(value: 'editar', child: Row(children: const [
+                    Icon(Icons.edit_outlined, size: 15),
+                    SizedBox(width: 8), Text('Editar', style: TextStyle(fontSize: 13))])),
+                  const PopupMenuDivider(),
+                  PopupMenuItem(value: 'toggle', child: Row(children: [
+                    Icon(activo ? Icons.toggle_off_outlined : Icons.toggle_on_outlined,
+                        size: 15, color: activo ? AppColors.danger : AppColors.success),
+                    const SizedBox(width: 8),
+                    Text(activo ? 'Desactivar' : 'Activar',
+                        style: TextStyle(fontSize: 13,
+                            color: activo ? AppColors.danger : AppColors.success))])),
+                ]),
+            ]),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 4, children: [
+              _NivelBadge(nivel: nivel),
+              _CertBadge(cert: certTipo),
+              _InfoChip(icono: Icons.calendar_today_outlined, texto: '$dias días'),
+            ]),
+            const SizedBox(height: 8),
+            const Divider(height: 1),
+            const SizedBox(height: 8),
+            Row(children: [
+              _MiniStat(icono: Icons.linear_scale_outlined, valor: fases, label: 'fases'),
+              const SizedBox(width: 16),
+              _MiniStat(icono: Icons.checklist_outlined, valor: checks, label: 'checklist'),
+              const SizedBox(width: 16),
+              _MiniStat(icono: Icons.description_outlined, valor: docs, label: 'documentos'),
+              const Spacer(),
+              if (!activo)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.dangerBg, borderRadius: BorderRadius.circular(8)),
+                  child: const Text('Inactivo',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w500, color: AppColors.danger))),
+            ]),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icono;
+  final int valor;
+  final String label;
+  const _MiniStat({required this.icono, required this.valor, required this.label});
+  @override
+  Widget build(BuildContext context) => Row(mainAxisSize: MainAxisSize.min, children: [
+    Icon(icono, size: 12, color: AppColors.textTertiary),
+    const SizedBox(width: 4),
+    Text('$valor $label', style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+  ]);
+}
+
+class _NivelBadge extends StatelessWidget {
+  final String nivel;
+  const _NivelBadge({required this.nivel});
+  @override
+  Widget build(BuildContext context) {
+    final (label, color) = switch (nivel) {
+      'BASICO'      => ('Básico',      const Color(0xFF059669)),
+      'INTERMEDIO'  => ('Intermedio',  const Color(0xFF0369A1)),
+      'AVANZADO'    => ('Avanzado',    const Color(0xFF7C3AED)),
+      _             => (nivel,         AppColors.textTertiary),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color)));
+  }
+}
+
+class _CertBadge extends StatelessWidget {
+  final String cert;
+  const _CertBadge({required this.cert});
+  @override
+  Widget build(BuildContext context) {
+    final label = switch (cert) { 'PROPIA' => 'Propia', 'EXTERNA' => 'Externa', 'AMBAS' => 'Ambas', _ => cert };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6), borderRadius: BorderRadius.circular(8)),
+      child: Text(label, style: const TextStyle(fontSize: 10, color: AppColors.textSecondary)));
+  }
+}
+
+
+class _TipoAuditoriaForm extends ConsumerStatefulWidget {
+  final Map<String, dynamic>? tipo;
+  final WidgetRef ref;
+  const _TipoAuditoriaForm({required this.ref, this.tipo});
+  @override
+  ConsumerState<_TipoAuditoriaForm> createState() => _TipoAuditoriaFormState();
+}
+
+class _TipoAuditoriaFormState extends ConsumerState<_TipoAuditoriaForm> {
+  final _form      = GlobalKey<FormState>();
+  late final TextEditingController _codigoCtrl, _nombreCtrl, _descCtrl,
+      _versionCtrl, _diasCtrl;
+  String  _categoria     = 'OTRO';
+  String  _nivel         = 'BASICO';
+  String  _certTipo      = 'PROPIA';
+  bool    _activo        = true;
+  bool    _guardando     = false;
+  String? _error;
+
+  bool get _esEdicion => widget.tipo != null;
+
+  static const _categorias = [
+    ('SEGURIDAD',  'Seguridad'),  ('CALIDAD',   'Calidad'),
+    ('AMBIENTAL',  'Ambiental'),  ('FINANCIERO','Financiero'), ('OTRO','Otro'),
+  ];
+  static const _niveles = [
+    ('BASICO','Básico'), ('INTERMEDIO','Intermedio'), ('AVANZADO','Avanzado'),
+  ];
+  static const _certs = [
+    ('PROPIA','Propia'), ('EXTERNA','Externa'), ('AMBAS','Ambas'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final t = widget.tipo;
+    _codigoCtrl  = TextEditingController(text: t?['codigo']   as String? ?? '');
+    _nombreCtrl  = TextEditingController(text: t?['nombre']   as String? ?? '');
+    _descCtrl    = TextEditingController(text: t?['descripcion'] as String? ?? '');
+    _versionCtrl = TextEditingController(text: t?['version']  as String? ?? '1.0');
+    _diasCtrl    = TextEditingController(
+        text: (t?['duracion_estimada_dias'] as int? ?? 30).toString());
+    _categoria   = t?['categoria']         as String? ?? 'OTRO';
+    _nivel       = t?['nivel']             as String? ?? 'BASICO';
+    _certTipo    = t?['certificacion_tipo'] as String? ?? 'PROPIA';
+    _activo      = t?['activo']            as bool?   ?? true;
+  }
+
+  @override
+  void dispose() {
+    for (final c in [_codigoCtrl, _nombreCtrl, _descCtrl, _versionCtrl, _diasCtrl]) c.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    if (!_form.currentState!.validate()) return;
+    setState(() { _guardando = true; _error = null; });
+    try {
+      final payload = {
+        'codigo':                 _codigoCtrl.text.trim().toUpperCase(),
+        'nombre':                 _nombreCtrl.text.trim(),
+        'descripcion':            _descCtrl.text.trim(),
+        'version':                _versionCtrl.text.trim(),
+        'duracion_estimada_dias': int.tryParse(_diasCtrl.text.trim()) ?? 30,
+        'categoria':              _categoria,
+        'nivel':                  _nivel,
+        'certificacion_tipo':     _certTipo,
+        'activo':                 _activo,
+      };
+      if (_esEdicion) {
+        await ApiClient.instance.patch(
+          Endpoints.tipoAuditoria(widget.tipo!['id'] as String), data: payload);
+      } else {
+        await ApiClient.instance.post(Endpoints.tiposAuditoria, data: payload);
+      }
+      widget.ref.invalidate(tiposAuditoriaAdminProvider);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      setState(() => _error = _parsearError(e));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  Widget _campo(String label, TextEditingController ctrl, {
+    String? hint, String? Function(String?)? validator,
+    TextInputType teclado = TextInputType.text, int maxLines = 1}) =>
+    Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary)),
+        const SizedBox(height: 5),
+        TextFormField(controller: ctrl, keyboardType: teclado, maxLines: maxLines,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(hintText: hint),
+          validator: validator),
+      ]));
+
+  Widget _drop<T>(String label, T value, List<(T, String)> items, void Function(T?) fn) =>
+    Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+            color: AppColors.textSecondary)),
+        const SizedBox(height: 5),
+        DropdownButtonFormField<T>(
+          value: value,
+          style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+          items: items.map((i) => DropdownMenuItem(value: i.$1, child: Text(i.$2))).toList(),
+          onChanged: fn),
+      ]));
+
+  Widget _seccion(String titulo, {IconData? icono}) => Padding(
+    padding: const EdgeInsets.only(top: 16, bottom: 10),
+    child: Row(children: [
+      if (icono != null) ...[Icon(icono, size: 15, color: AppColors.accent), const SizedBox(width: 6)],
+      Text(titulo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+      const SizedBox(width: 8), const Expanded(child: Divider()),
+    ]));
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    padding: EdgeInsets.fromLTRB(20, 8, 20, MediaQuery.of(context).viewInsets.bottom + 28),
+    child: Form(key: _form, child: SingleChildScrollView(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 16),
+            decoration: BoxDecoration(color: AppColors.gray300, borderRadius: BorderRadius.circular(2)))),
+        Row(children: [
+          Container(padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(color: AppColors.accentLight, borderRadius: BorderRadius.circular(8)),
+            child: Icon(_esEdicion ? Icons.edit_outlined : Icons.add_box_outlined,
+                size: 18, color: AppColors.accent)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(_esEdicion ? 'Editar tipo de auditoría' : 'Nuevo tipo de auditoría',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700))),
+          IconButton(onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.close, size: 20),
+              style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary)),
+        ]),
+
+        _seccion('Identificación', icono: Icons.tag_outlined),
+        Row(children: [
+          SizedBox(width: 120, child: _campo('Código *', _codigoCtrl, hint: 'ISO27001',
+            validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null)),
+          const SizedBox(width: 12),
+          Expanded(child: _campo('Versión', _versionCtrl, hint: '1.0')),
+        ]),
+        _campo('Nombre *', _nombreCtrl, hint: 'Ej: Auditoría ISO 27001',
+          validator: (v) => v == null || v.trim().isEmpty ? 'Requerido' : null),
+        _campo('Descripción', _descCtrl, hint: 'Objetivo y alcance del tipo de auditoría',
+          maxLines: 3),
+
+        _seccion('Clasificación', icono: Icons.category_outlined),
+        _drop('Categoría', _categoria, _categorias, (v) => setState(() => _categoria = v!)),
+        _drop('Nivel de complejidad', _nivel, _niveles, (v) => setState(() => _nivel = v!)),
+        _drop('Tipo de certificación', _certTipo, _certs, (v) => setState(() => _certTipo = v!)),
+
+        _seccion('Duración', icono: Icons.schedule_outlined),
+        _campo('Duración estimada (días) *', _diasCtrl, hint: '30',
+          teclado: TextInputType.number,
+          validator: (v) {
+            if (v == null || v.trim().isEmpty) return 'Requerido';
+            if (int.tryParse(v.trim()) == null) return 'Número inválido';
+            return null;
+          }),
+
+        if (_esEdicion) ...[
+          _seccion('Estado', icono: Icons.toggle_on_outlined),
+          Row(children: [
+            Switch(value: _activo, onChanged: (v) => setState(() => _activo = v),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            const SizedBox(width: 8),
+            Text(_activo ? 'Activo — disponible para selección' : 'Inactivo — no aparece en formularios',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+          ]),
+        ],
+
+        if (_error != null)
+          Container(
+            margin: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: AppColors.dangerBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.danger.withOpacity(0.3))),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.error_outline, size: 14, color: AppColors.danger),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_error!,
+                  style: const TextStyle(fontSize: 12, color: AppColors.danger))),
+            ])),
+
+        const SizedBox(height: 20),
+        SizedBox(width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: _guardando ? null : _guardar,
+            icon: _guardando
+              ? const SizedBox(width: 16, height: 16,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+              : Icon(_esEdicion ? Icons.save_outlined : Icons.add, size: 16),
+            label: Text(_esEdicion ? 'Guardar cambios' : 'Crear tipo'),
+            style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)))),
+      ]))),
+  );
+}
+
+
+class _TipoAuditoriaDetalle extends ConsumerStatefulWidget {
+  final Map<String, dynamic> tipo;
+  final WidgetRef ref;
+  const _TipoAuditoriaDetalle({required this.ref, required this.tipo});
+  @override
+  ConsumerState<_TipoAuditoriaDetalle> createState() => _TipoAuditoriaDetalleState();
+}
+
+class _TipoAuditoriaDetalleState extends ConsumerState<_TipoAuditoriaDetalle>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabs;
+  late Map<String, dynamic> _tipo;
+  bool _recargando = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tipo = Map<String, dynamic>.from(widget.tipo);
+    _tabs = TabController(length: 3, vsync: this);
+  }
+
+  @override
+  void dispose() { _tabs.dispose(); super.dispose(); }
+
+  List<Map<String, dynamic>> get _fases =>
+      (_tipo['fases'] as List? ?? []).cast<Map<String, dynamic>>();
+  List<Map<String, dynamic>> get _checklist =>
+      (_tipo['checklist_items'] as List? ?? []).cast<Map<String, dynamic>>();
+  List<Map<String, dynamic>> get _docs =>
+      (_tipo['documentos_requeridos'] as List? ?? []).cast<Map<String, dynamic>>();
+
+  Future<void> _recargar() async {
+    setState(() => _recargando = true);
+    try {
+      final resp = await ApiClient.instance.get(
+          Endpoints.tipoAuditoria(_tipo['id'] as String));
+      setState(() => _tipo = Map<String, dynamic>.from(resp.data as Map));
+    } catch (_) {} finally {
+      if (mounted) setState(() => _recargando = false);
+    }
+  }
+
+
+  void _abrirFaseForm({Map<String, dynamic>? fase}) => showModalBottomSheet(
+    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+    builder: (_) => _FaseForm(tipoId: _tipo['id'] as String, fase: fase,
+        ordenSiguiente: _fases.length + 1))
+    .then((_) => _recargar());
+
+  Future<void> _eliminarFase(Map<String, dynamic> fase) async {
+    final ok = await _confirmar(context,
+      titulo: '¿Eliminar fase?',
+      mensaje: '"${fase['nombre']}" será eliminada permanentemente.',
+      labelOk: 'Eliminar', colorOk: AppColors.danger);
+    if (!ok) return;
+    try {
+      await ApiClient.instance.delete(
+          Endpoints.tipoAuditoriaFase(fase['id'] as String));
+      _recargar();
+    } catch (e) {
+      if (mounted) _snack(context, _parsearError(e), error: true);
+    }
+  }
+
+
+  void _abrirChecklistForm({Map<String, dynamic>? item}) => showModalBottomSheet(
+    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+    builder: (_) => _ChecklistItemForm(
+        tipoId: _tipo['id'] as String, fases: _fases, item: item,
+        ordenSiguiente: _checklist.length + 1))
+    .then((_) => _recargar());
+
+  Future<void> _eliminarChecklist(Map<String, dynamic> item) async {
+    final ok = await _confirmar(context,
+      titulo: '¿Eliminar ítem?',
+      mensaje: '"${item['descripcion']}" será eliminado.',
+      labelOk: 'Eliminar', colorOk: AppColors.danger);
+    if (!ok) return;
+    try {
+      await ApiClient.instance.delete(
+          Endpoints.tipoAuditoriaChecklistItem(item['id'] as String));
+      _recargar();
+    } catch (e) {
+      if (mounted) _snack(context, _parsearError(e), error: true);
+    }
+  }
+
+
+  void _abrirDocForm({Map<String, dynamic>? doc}) => showModalBottomSheet(
+    context: context, isScrollControlled: true, backgroundColor: Colors.transparent,
+    builder: (_) => _DocumentoRequeridoForm(
+        tipoId: _tipo['id'] as String, doc: doc,
+        ordenSiguiente: _docs.length + 1))
+    .then((_) => _recargar());
+
+  Future<void> _eliminarDoc(Map<String, dynamic> doc) async {
+    final ok = await _confirmar(context,
+      titulo: '¿Eliminar documento?',
+      mensaje: '"${doc['nombre']}" será eliminado.',
+      labelOk: 'Eliminar', colorOk: AppColors.danger);
+    if (!ok) return;
+    try {
+      await ApiClient.instance.delete(
+          Endpoints.tipoAuditoriaDocumento(doc['id'] as String));
+      _recargar();
+    } catch (e) {
+      if (mounted) _snack(context, _parsearError(e), error: true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(color: AppColors.bg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    child: DraggableScrollableSheet(
+      expand: false, initialChildSize: 0.92, minChildSize: 0.5, maxChildSize: 0.95,
+      builder: (_, scrollCtrl) => Column(children: [
+
+        Container(color: AppColors.white,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Column(children: [
+            Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(color: AppColors.gray300, borderRadius: BorderRadius.circular(2)))),
+            Row(children: [
+              Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: AppColors.accentLight, borderRadius: BorderRadius.circular(6)),
+                child: Text(_tipo['codigo'] as String? ?? '',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent))),
+              const SizedBox(width: 10),
+              Expanded(child: Text(_tipo['nombre'] as String? ?? '',
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700))),
+              if (_recargando)
+                const SizedBox(width: 18, height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              IconButton(onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close, size: 20),
+                  style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary)),
+            ]),
+            const SizedBox(height: 10),
+            TabBar(controller: _tabs, tabs: [
+              Tab(text: 'Fases (${_fases.length})'),
+              Tab(text: 'Checklist (${_checklist.length})'),
+              Tab(text: 'Docs (${_docs.length})'),
+            ]),
+          ])),
+        const Divider(height: 1),
+        Expanded(child: TabBarView(controller: _tabs, children: [
+
+          _buildListaConFAB(
+            items: _fases,
+            emptyTitle: 'Sin fases',
+            emptySubtitle: 'Define las etapas del proceso de auditoría.',
+            onAdd: () => _abrirFaseForm(),
+            fabLabel: 'Nueva fase',
+            builder: (fase) => _FaseTile(
+              fase: fase,
+              onEditar: () => _abrirFaseForm(fase: fase),
+              onEliminar: () => _eliminarFase(fase)),
+          ),
+
+          _buildListaConFAB(
+            items: _checklist,
+            emptyTitle: 'Sin ítems de checklist',
+            emptySubtitle: 'Define los criterios de verificación.',
+            onAdd: () => _abrirChecklistForm(),
+            fabLabel: 'Nuevo ítem',
+            builder: (item) => _ChecklistTile(
+              item: item,
+              onEditar: () => _abrirChecklistForm(item: item),
+              onEliminar: () => _eliminarChecklist(item)),
+          ),
+
+          _buildListaConFAB(
+            items: _docs,
+            emptyTitle: 'Sin documentos requeridos',
+            emptySubtitle: 'Define los documentos que el cliente debe entregar.',
+            onAdd: () => _abrirDocForm(),
+            fabLabel: 'Nuevo documento',
+            builder: (doc) => _DocRequeridoTile(
+              doc: doc,
+              onEditar: () => _abrirDocForm(doc: doc),
+              onEliminar: () => _eliminarDoc(doc)),
+          ),
+        ])),
+      ]),
+    ),
+  );
+
+  Widget _buildListaConFAB({
+    required List<Map<String, dynamic>> items,
+    required String emptyTitle, required String emptySubtitle,
+    required VoidCallback onAdd, required String fabLabel,
+    required Widget Function(Map<String, dynamic>) builder,
+  }) => Stack(children: [
+    items.isEmpty
+      ? EmptyState(titulo: emptyTitle, subtitulo: emptySubtitle,
+          icono: Icons.add_box_outlined, labelBoton: fabLabel, onBoton: onAdd)
+      : ListView.separated(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 88),
+          itemCount: items.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 6),
+          itemBuilder: (_, i) => builder(items[i])),
+    Positioned(bottom: 16, right: 16,
+      child: FloatingActionButton.extended(
+        heroTag: 'fab_sub_$fabLabel',
+        onPressed: onAdd,
+        icon: const Icon(Icons.add, size: 18),
+        label: Text(fabLabel),
+        backgroundColor: AppColors.accent, foregroundColor: Colors.white)),
+  ]);
+}
+
+class _FaseTile extends StatelessWidget {
+  final Map<String, dynamic> fase;
+  final VoidCallback onEditar, onEliminar;
+  const _FaseTile({required this.fase, required this.onEditar, required this.onEliminar});
+  @override
+  Widget build(BuildContext context) {
+    final esFinal = fase['es_fase_final'] as bool? ?? false;
+    return Card(child: Padding(padding: const EdgeInsets.all(12),
+      child: Row(children: [
+        Container(width: 28, height: 28,
+          decoration: BoxDecoration(
+            color: esFinal ? AppColors.accentLight : AppColors.gray100,
+            borderRadius: BorderRadius.circular(6)),
+          child: Center(child: Text('${fase['orden'] ?? '?'}',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
+              color: esFinal ? AppColors.accent : AppColors.textSecondary)))),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text(fase['nombre'] as String? ?? '',
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+            if (esFinal) Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(color: AppColors.accentLight, borderRadius: BorderRadius.circular(8)),
+              child: const Text('Final', style: TextStyle(fontSize: 10, color: AppColors.accent, fontWeight: FontWeight.w600))),
+          ]),
+          if ((fase['descripcion'] as String? ?? '').isNotEmpty)
+            Text(fase['descripcion'] as String,
+              style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Text('${fase['duracion_estimada_dias'] ?? 0} días estimados',
+            style: const TextStyle(fontSize: 11, color: AppColors.textTertiary)),
+        ])),
+        PopupMenuButton<String>(
+          onSelected: (v) { if (v == 'editar') onEditar(); else onEliminar(); },
+          icon: const Icon(Icons.more_vert, size: 16, color: AppColors.textTertiary),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'editar', child: Row(children: const [
+              Icon(Icons.edit_outlined, size: 14), SizedBox(width: 8), Text('Editar', style: TextStyle(fontSize: 13))])),
+            PopupMenuItem(value: 'eliminar', child: Row(children: const [
+              Icon(Icons.delete_outline, size: 14, color: AppColors.danger),
+              SizedBox(width: 8), Text('Eliminar', style: TextStyle(fontSize: 13, color: AppColors.danger))])),
+          ]),
+      ])));
+  }
+}
+
+class _ChecklistTile extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final VoidCallback onEditar, onEliminar;
+  const _ChecklistTile({required this.item, required this.onEditar, required this.onEliminar});
+  @override
+  Widget build(BuildContext context) {
+    final obligatorio = item['obligatorio'] as bool? ?? true;
+    final cat = item['categoria'] as String? ?? '';
+    return Card(child: Padding(padding: const EdgeInsets.all(12),
+      child: Row(children: [
+        Icon(obligatorio ? Icons.check_box_outlined : Icons.check_box_outline_blank_outlined,
+          size: 18, color: obligatorio ? AppColors.accent : AppColors.textTertiary),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(color: AppColors.gray100, borderRadius: BorderRadius.circular(4)),
+              child: Text(item['codigo'] as String? ?? '',
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textSecondary))),
+            const SizedBox(width: 6),
+            if (cat.isNotEmpty) Container(padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              decoration: BoxDecoration(color: AppColors.infoBg, borderRadius: BorderRadius.circular(4)),
+              child: Text(cat, style: const TextStyle(fontSize: 10, color: AppColors.info))),
+          ]),
+          const SizedBox(height: 3),
+          Text(item['descripcion'] as String? ?? '',
+            style: const TextStyle(fontSize: 12, color: AppColors.textPrimary),
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+        ])),
+        PopupMenuButton<String>(
+          onSelected: (v) { if (v == 'editar') onEditar(); else onEliminar(); },
+          icon: const Icon(Icons.more_vert, size: 16, color: AppColors.textTertiary),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'editar', child: Row(children: const [
+              Icon(Icons.edit_outlined, size: 14), SizedBox(width: 8), Text('Editar', style: TextStyle(fontSize: 13))])),
+            PopupMenuItem(value: 'eliminar', child: Row(children: const [
+              Icon(Icons.delete_outline, size: 14, color: AppColors.danger),
+              SizedBox(width: 8), Text('Eliminar', style: TextStyle(fontSize: 13, color: AppColors.danger))])),
+          ]),
+      ])));
+  }
+}
+
+class _DocRequeridoTile extends StatelessWidget {
+  final Map<String, dynamic> doc;
+  final VoidCallback onEditar, onEliminar;
+  const _DocRequeridoTile({required this.doc, required this.onEditar, required this.onEliminar});
+  @override
+  Widget build(BuildContext context) {
+    final obligatorio = doc['obligatorio'] as bool? ?? true;
+    return Card(child: Padding(padding: const EdgeInsets.all(12),
+      child: Row(children: [
+        Icon(Icons.description_outlined, size: 18,
+          color: obligatorio ? AppColors.accent : AppColors.textTertiary),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(doc['nombre'] as String? ?? '',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+          if ((doc['descripcion'] as String? ?? '').isNotEmpty)
+            Text(doc['descripcion'] as String,
+              style: const TextStyle(fontSize: 11, color: AppColors.textTertiary),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          if (!obligatorio)
+            const Text('Opcional', style: TextStyle(fontSize: 10, color: AppColors.textTertiary)),
+        ])),
+        PopupMenuButton<String>(
+          onSelected: (v) { if (v == 'editar') onEditar(); else onEliminar(); },
+          icon: const Icon(Icons.more_vert, size: 16, color: AppColors.textTertiary),
+          itemBuilder: (_) => [
+            PopupMenuItem(value: 'editar', child: Row(children: const [
+              Icon(Icons.edit_outlined, size: 14), SizedBox(width: 8), Text('Editar', style: TextStyle(fontSize: 13))])),
+            PopupMenuItem(value: 'eliminar', child: Row(children: const [
+              Icon(Icons.delete_outline, size: 14, color: AppColors.danger),
+              SizedBox(width: 8), Text('Eliminar', style: TextStyle(fontSize: 13, color: AppColors.danger))])),
+          ]),
+      ])));
+  }
+}
+
+
+class _FaseForm extends StatefulWidget {
+  final String tipoId;
+  final Map<String, dynamic>? fase;
+  final int ordenSiguiente;
+  const _FaseForm({required this.tipoId, this.fase, required this.ordenSiguiente});
+  @override
+  State<_FaseForm> createState() => _FaseFormState();
+}
+
+class _FaseFormState extends State<_FaseForm> {
+  final _nombreCtrl = TextEditingController();
+  final _descCtrl   = TextEditingController();
+  final _diasCtrl   = TextEditingController();
+  final _ordenCtrl  = TextEditingController();
+  bool _esFinal   = false;
+  bool _guardando = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final f = widget.fase;
+    _nombreCtrl.text = f?['nombre'] as String? ?? '';
+    _descCtrl.text   = f?['descripcion'] as String? ?? '';
+    _diasCtrl.text   = (f?['duracion_estimada_dias'] as int? ?? 7).toString();
+    _ordenCtrl.text  = (f?['orden'] as int? ?? widget.ordenSiguiente).toString();
+    _esFinal         = f?['es_fase_final'] as bool? ?? false;
+  }
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose(); _descCtrl.dispose();
+    _diasCtrl.dispose(); _ordenCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _guardar() async {
+    if (_nombreCtrl.text.trim().isEmpty) return;
+    setState(() { _guardando = true; _error = null; });
+    try {
+      final payload = {
+        'tipo_auditoria': widget.tipoId,
+        'nombre': _nombreCtrl.text.trim(),
+        'descripcion': _descCtrl.text.trim(),
+        'duracion_estimada_dias': int.tryParse(_diasCtrl.text.trim()) ?? 7,
+        'orden': int.tryParse(_ordenCtrl.text.trim()) ?? widget.ordenSiguiente,
+        'es_fase_final': _esFinal,
+      };
+      final id = widget.fase?['id'] as String?;
+      if (id != null) {
+        await ApiClient.instance.patch(Endpoints.tipoAuditoriaFase(id), data: payload);
+      } else {
+        await ApiClient.instance.post(Endpoints.tiposAuditoriaFases, data: payload);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() => _error = _parsearError(e));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _SubFormShell(
+    titulo: widget.fase == null ? 'Nueva fase' : 'Editar fase',
+    icono: Icons.linear_scale_outlined,
+    guardando: _guardando, error: _error,
+    onGuardar: _guardar,
+    onCancelar: () => Navigator.pop(context),
+    child: Column(children: [
+      Row(children: [
+        SizedBox(width: 70, child: _SubCampo('Orden', _ordenCtrl, teclado: TextInputType.number)),
+        const SizedBox(width: 12),
+        SizedBox(width: 90, child: _SubCampo('Días est.', _diasCtrl, teclado: TextInputType.number)),
+      ]),
+      _SubCampo('Nombre *', _nombreCtrl, hint: 'Ej: Análisis de riesgos'),
+      _SubCampo('Descripción', _descCtrl, hint: 'Qué se hace en esta fase', maxLines: 2),
+      Row(children: [
+        Switch(value: _esFinal, onChanged: (v) => setState(() => _esFinal = v),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+        const SizedBox(width: 8),
+        const Text('Es la fase final del proceso',
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      ]),
+    ]),
+  );
+}
+
+
+class _ChecklistItemForm extends StatefulWidget {
+  final String tipoId;
+  final List<Map<String, dynamic>> fases;
+  final Map<String, dynamic>? item;
+  final int ordenSiguiente;
+  const _ChecklistItemForm({
+    required this.tipoId, required this.fases,
+    this.item, required this.ordenSiguiente});
+  @override
+  State<_ChecklistItemForm> createState() => _ChecklistItemFormState();
+}
+
+class _ChecklistItemFormState extends State<_ChecklistItemForm> {
+  final _codigoCtrl = TextEditingController();
+  final _descCtrl   = TextEditingController();
+  final _ordenCtrl  = TextEditingController();
+  String  _categoria   = 'DOCUMENTAL';
+  String? _faseId;
+  bool    _obligatorio = true;
+  bool    _guardando   = false;
+  String? _error;
+
+  static const _cats = [
+    ('DOCUMENTAL','Documental'), ('TECNICO','Técnico'),
+    ('LEGAL','Legal'), ('OPERACIONAL','Operacional'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final it = widget.item;
+    _codigoCtrl.text  = it?['codigo'] as String? ?? '';
+    _descCtrl.text    = it?['descripcion'] as String? ?? '';
+    _ordenCtrl.text   = (it?['orden'] as int? ?? widget.ordenSiguiente).toString();
+    _categoria        = it?['categoria'] as String? ?? 'DOCUMENTAL';
+    _obligatorio      = it?['obligatorio'] as bool? ?? true;
+    _faseId           = it?['fase'] as String?;
+  }
+
+  @override
+  void dispose() { _codigoCtrl.dispose(); _descCtrl.dispose(); _ordenCtrl.dispose(); super.dispose(); }
+
+  Future<void> _guardar() async {
+    if (_descCtrl.text.trim().isEmpty || _codigoCtrl.text.trim().isEmpty) return;
+    setState(() { _guardando = true; _error = null; });
+    try {
+      final payload = {
+        'tipo_auditoria': widget.tipoId,
+        'codigo': _codigoCtrl.text.trim().toUpperCase(),
+        'descripcion': _descCtrl.text.trim(),
+        'orden': int.tryParse(_ordenCtrl.text.trim()) ?? widget.ordenSiguiente,
+        'categoria': _categoria,
+        'obligatorio': _obligatorio,
+        if (_faseId != null) 'fase': _faseId,
+      };
+      final id = widget.item?['id'] as String?;
+      if (id != null) {
+        await ApiClient.instance.patch(Endpoints.tipoAuditoriaChecklistItem(id), data: payload);
+      } else {
+        await ApiClient.instance.post(Endpoints.tiposAuditoriaChecklist, data: payload);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() => _error = _parsearError(e));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _SubFormShell(
+    titulo: widget.item == null ? 'Nuevo ítem de checklist' : 'Editar ítem',
+    icono: Icons.checklist_outlined,
+    guardando: _guardando, error: _error,
+    onGuardar: _guardar, onCancelar: () => Navigator.pop(context),
+    child: Column(children: [
+      Row(children: [
+        SizedBox(width: 100, child: _SubCampo('Código *', _codigoCtrl, hint: 'CTR-01')),
+        const SizedBox(width: 12),
+        SizedBox(width: 70, child: _SubCampo('Orden', _ordenCtrl, teclado: TextInputType.number)),
+      ]),
+      _SubCampo('Descripción *', _descCtrl, hint: 'Criterio de verificación', maxLines: 3),
+      _SubDrop<String>('Categoría', _categoria, _cats, (v) => setState(() => _categoria = v!)),
+      if (widget.fases.isNotEmpty)
+        _SubDrop<String?>('Fase asociada (opcional)', _faseId,
+          [const (null, 'General (sin fase específica)'),
+           ...widget.fases.map((f) => (f['id'] as String, f['nombre'] as String? ?? ''))],
+          (v) => setState(() => _faseId = v)),
+      Row(children: [
+        Switch(value: _obligatorio, onChanged: (v) => setState(() => _obligatorio = v),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+        const SizedBox(width: 8),
+        const Text('Obligatorio', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      ]),
+    ]),
+  );
+}
+
+
+class _DocumentoRequeridoForm extends StatefulWidget {
+  final String tipoId;
+  final Map<String, dynamic>? doc;
+  final int ordenSiguiente;
+  const _DocumentoRequeridoForm({
+    required this.tipoId, this.doc, required this.ordenSiguiente});
+  @override
+  State<_DocumentoRequeridoForm> createState() => _DocumentoRequeridoFormState();
+}
+
+class _DocumentoRequeridoFormState extends State<_DocumentoRequeridoForm> {
+  final _nombreCtrl = TextEditingController();
+  final _descCtrl   = TextEditingController();
+  final _ordenCtrl  = TextEditingController();
+  bool _obligatorio = true;
+  bool _guardando   = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.doc;
+    _nombreCtrl.text = d?['nombre'] as String? ?? '';
+    _descCtrl.text   = d?['descripcion'] as String? ?? '';
+    _ordenCtrl.text  = (d?['orden'] as int? ?? widget.ordenSiguiente).toString();
+    _obligatorio     = d?['obligatorio'] as bool? ?? true;
+  }
+
+  @override
+  void dispose() { _nombreCtrl.dispose(); _descCtrl.dispose(); _ordenCtrl.dispose(); super.dispose(); }
+
+  Future<void> _guardar() async {
+    if (_nombreCtrl.text.trim().isEmpty) return;
+    setState(() { _guardando = true; _error = null; });
+    try {
+      final payload = {
+        'tipo_auditoria': widget.tipoId,
+        'nombre': _nombreCtrl.text.trim(),
+        'descripcion': _descCtrl.text.trim(),
+        'orden': int.tryParse(_ordenCtrl.text.trim()) ?? widget.ordenSiguiente,
+        'obligatorio': _obligatorio,
+      };
+      final id = widget.doc?['id'] as String?;
+      if (id != null) {
+        await ApiClient.instance.patch(Endpoints.tipoAuditoriaDocumento(id), data: payload);
+      } else {
+        await ApiClient.instance.post(Endpoints.tiposAuditoriaDocumentos, data: payload);
+      }
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      setState(() => _error = _parsearError(e));
+    } finally {
+      if (mounted) setState(() => _guardando = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => _SubFormShell(
+    titulo: widget.doc == null ? 'Nuevo documento requerido' : 'Editar documento',
+    icono: Icons.description_outlined,
+    guardando: _guardando, error: _error,
+    onGuardar: _guardar, onCancelar: () => Navigator.pop(context),
+    child: Column(children: [
+      Row(children: [
+        Expanded(child: _SubCampo('Nombre del documento *', _nombreCtrl,
+            hint: 'Ej: Política de seguridad de la información')),
+        const SizedBox(width: 12),
+        SizedBox(width: 70, child: _SubCampo('Orden', _ordenCtrl, teclado: TextInputType.number)),
+      ]),
+      _SubCampo('Descripción / instrucciones', _descCtrl,
+          hint: 'Formato, versión o condiciones requeridas', maxLines: 2),
+      Row(children: [
+        Switch(value: _obligatorio, onChanged: (v) => setState(() => _obligatorio = v),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap),
+        const SizedBox(width: 8),
+        const Text('Obligatorio', style: TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      ]),
+    ]),
+  );
+}
+
+
+class _SubFormShell extends StatelessWidget {
+  final String titulo;
+  final IconData icono;
+  final Widget child;
+  final bool guardando;
+  final String? error;
+  final VoidCallback onGuardar, onCancelar;
+  const _SubFormShell({
+    required this.titulo, required this.icono, required this.child,
+    required this.guardando, this.error,
+    required this.onGuardar, required this.onCancelar});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: const BoxDecoration(color: AppColors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+    padding: EdgeInsets.fromLTRB(20, 8, 20, MediaQuery.of(context).viewInsets.bottom + 24),
+    child: SingleChildScrollView(child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min, children: [
+      Center(child: Container(width: 36, height: 4, margin: const EdgeInsets.only(bottom: 14),
+          decoration: BoxDecoration(color: AppColors.gray300, borderRadius: BorderRadius.circular(2)))),
+      Row(children: [
+        Icon(icono, size: 18, color: AppColors.accent),
+        const SizedBox(width: 10),
+        Expanded(child: Text(titulo, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+        IconButton(onPressed: onCancelar, icon: const Icon(Icons.close, size: 18),
+            style: IconButton.styleFrom(foregroundColor: AppColors.textSecondary)),
+      ]),
+      const SizedBox(height: 14),
+      child,
+      if (error != null)
+        Container(margin: const EdgeInsets.only(top: 10), padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: AppColors.dangerBg, borderRadius: BorderRadius.circular(8)),
+          child: Text(error!, style: const TextStyle(fontSize: 12, color: AppColors.danger))),
+      const SizedBox(height: 16),
+      Row(children: [
+        Expanded(child: OutlinedButton(onPressed: onCancelar, child: const Text('Cancelar'))),
+        const SizedBox(width: 12),
+        Expanded(child: ElevatedButton.icon(
+          onPressed: guardando ? null : onGuardar,
+          icon: guardando
+            ? const SizedBox(width: 14, height: 14,
+                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+            : const Icon(Icons.save_outlined, size: 15),
+          label: const Text('Guardar'))),
+      ]),
+    ])));
+}
+
+Widget _SubCampo(String label, TextEditingController ctrl, {
+  String? hint, TextInputType teclado = TextInputType.text, int maxLines = 1}) =>
+  Padding(padding: const EdgeInsets.only(bottom: 10),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+          color: AppColors.textSecondary)),
+      const SizedBox(height: 4),
+      TextFormField(controller: ctrl, keyboardType: teclado, maxLines: maxLines,
+        style: const TextStyle(fontSize: 13),
+        decoration: InputDecoration(hintText: hint, isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8))),
+    ]));
+
+Widget _SubDrop<T>(String label, T value, List<(T, String)> items, void Function(T?) fn) =>
+  Padding(padding: const EdgeInsets.only(bottom: 10),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500,
+          color: AppColors.textSecondary)),
+      const SizedBox(height: 4),
+      DropdownButtonFormField<T>(
+        value: value,
+        style: const TextStyle(fontSize: 13, color: AppColors.textPrimary),
+        decoration: const InputDecoration(isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8)),
+        items: items.map((i) => DropdownMenuItem(value: i.$1, child: Text(i.$2))).toList(),
+        onChanged: fn),
+    ]));
 
 class _TabFormularios extends ConsumerStatefulWidget {
   final WidgetRef ref;

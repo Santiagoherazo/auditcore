@@ -5,7 +5,7 @@ import '../api/api_client.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 
-// ── Servicios (singleton por provider) ───────────────────────────────────
+
 final authServiceProvider        = Provider((_) => AuthService());
 final clientesServiceProvider    = Provider((_) => ClientesService());
 final expedientesServiceProvider = Provider((_) => ExpedientesService());
@@ -14,12 +14,11 @@ final certServiceProvider        = Provider((_) => CertificacionesService());
 final chatbotServiceProvider     = Provider((_) => ChatbotService());
 final dashboardServiceProvider   = Provider((_) => DashboardService());
 
-// ── Setup status — ¿la plataforma ya fue configurada? ───────────────────────
-// con el router, que necesita este provider antes de que setup_screen se cargue.
+
 final setupStatusProvider = FutureProvider<bool>((ref) async {
   try {
-    // incluyendo rutas relativas en web Docker) en vez de crear un Dio suelto.
-    // Timeout corto para no bloquear el splash demasiado tiempo.
+
+
     final resp = await ApiClient.instance
         .get(
           'auth/setup/status/',
@@ -30,13 +29,12 @@ final setupStatusProvider = FutureProvider<bool>((ref) async {
         );
     return resp.data['configured'] == true;
   } catch (_) {
-    // Si el backend no responde (primera vez sin Docker), asumir no configurado
+
     return false;
   }
 });
 
 
-// ── Usuario autenticado ───────────────────────────────────────────────────
 class AuthNotifier extends StateNotifier<AsyncValue<UsuarioModel?>> {
   AuthNotifier(this._service) : super(const AsyncValue.loading()) {
     cargarUsuario();
@@ -66,19 +64,18 @@ class AuthNotifier extends StateNotifier<AsyncValue<UsuarioModel?>> {
     } on DioException catch (e) {
       final status = e.response?.statusCode;
       if (status == 401 || status == 403) {
-        // Token inválido, expirado o usuario bloqueado — limpiar sesión
+
         await ApiClient.clearTokens();
         state = const AsyncValue.data(null);
       } else {
-        // Error de red (sin conexión, timeout, 500) → mantener estado actual
-        // No limpiar tokens: el usuario puede tener sesión válida, solo hay
-        // un problema temporal de conectividad. Mostrar estado anterior.
+
+
         if (state is! AsyncData) {
           state = const AsyncValue.data(null);
         }
       }
     } on TimeoutException {
-      // Timeout de 8s — misma lógica que error de red
+
       if (state is! AsyncData) {
         state = const AsyncValue.data(null);
       }
@@ -97,15 +94,12 @@ final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<UsuarioModel
   (ref) => AuthNotifier(ref.watch(authServiceProvider)),
 );
 
-// ── Dashboard global ──────────────────────────────────────────────────────
-// autoDispose: cuando nadie escucha el provider, sus datos se descartan.
-// Al volver al dashboard, se vuelve a fetchear para mostrar datos frescos.
-// WebSocket llama ref.invalidate(dashboardProvider) al recibir dashboard_update.
+
 final dashboardProvider = FutureProvider.autoDispose<DashboardModel>((ref) async {
   return ref.watch(dashboardServiceProvider).global();
 });
 
-// ── Clientes ──────────────────────────────────────────────────────────────
+
 final clientesFiltroProvider = StateProvider<Map<String, String?>>((ref) => {});
 
 final clientesProvider = FutureProvider.autoDispose<List<ClienteModel>>((ref) async {
@@ -121,7 +115,7 @@ final clienteProvider = FutureProvider.autoDispose.family<ClienteModel, String>(
   (ref, id) => ref.watch(clientesServiceProvider).obtener(id),
 );
 
-// ── Expedientes ───────────────────────────────────────────────────────────
+
 final expedientesProvider = FutureProvider.autoDispose<List<ExpedienteModel>>((ref) async {
   return ref.watch(expedientesServiceProvider).listar();
 });
@@ -134,17 +128,17 @@ final bitacoraProvider = FutureProvider.autoDispose.family<List<BitacoraModel>, 
   (ref, id) => ref.watch(expedientesServiceProvider).bitacora(id),
 );
 
-// ── Hallazgos ─────────────────────────────────────────────────────────────
+
 final hallazgosProvider = FutureProvider.autoDispose.family<List<HallazgoModel>, String>(
   (ref, expedienteId) => ref.watch(hallazgosServiceProvider).listar(expediente: expedienteId),
 );
 
-// ── Certificaciones ───────────────────────────────────────────────────────
+
 final certificacionesProvider = FutureProvider.autoDispose<List<CertificacionModel>>((ref) async {
   return ref.watch(certServiceProvider).listar();
 });
 
-// ── Documentos ────────────────────────────────────────────────────────────
+
 final documentosServiceProvider = Provider((_) => DocumentosService());
 
 final documentosProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
@@ -155,7 +149,7 @@ final documentosExpedienteProvider = FutureProvider.autoDispose.family<List<Map<
   (ref, expedienteId) => ref.watch(documentosServiceProvider).porExpediente(expedienteId),
 );
 
-// ── Checklist ─────────────────────────────────────────────────────────────
+
 final checklistServiceProvider   = Provider((_) => ChecklistService());
 final formulariosServiceProvider = Provider((_) => FormulariosService());
 
@@ -164,42 +158,33 @@ final checklistExpedienteProvider =
   (ref, expedienteId) => ref.watch(checklistServiceProvider).porExpediente(expedienteId),
 );
 
-// ── Chatbot ───────────────────────────────────────────────────────────────
+
 class ChatNotifier extends StateNotifier<List<MensajeModel>> {
   ChatNotifier(this._service) : super([]);
   final ChatbotService _service;
 
-  /// ID de conversación activa. Persiste mientras dure la sesión del usuario.
-  /// Solo se limpia al hacer logout (SessionService.logout → limpiar()).
+
   String? convId;
 
-  /// expedienteId vinculado a la conversación activa.
+
   String? _expedienteId;
 
-  /// Inicia o reanuda la sesión de chat.
-  ///
-  /// - Si ya hay convId activo y el expediente NO cambió → reanuda sin tocar
-  ///   el historial. El ChatScreen solo reconecta el WebSocket.
-  /// - Si no hay convId, o el expediente cambió → crea conversación nueva.
-  ///
-  /// Esto resuelve el bug donde navegar a otra pantalla y volver al chat
-  /// borraba toda la conversación al recrear el widget.
+
   Future<void> iniciarOReanudar({String? expedienteId}) async {
     final expedienteCambio = expedienteId != _expedienteId;
     if (convId != null && !expedienteCambio) {
-      return; // Reanuda — no borrar historial
+      return;
     }
     state        = [];
     _expedienteId = expedienteId;
     convId = await _service.crearConversacion(expedienteId: expedienteId);
   }
 
-  /// Alias para compatibilidad con código existente.
+
   Future<void> iniciarNueva({String? expedienteId}) =>
       iniciarOReanudar(expedienteId: expedienteId);
 
-  /// Limpia completamente la sesión de chat.
-  /// Solo llamar desde SessionService.logout() — no al navegar entre pantallas.
+
   void limpiar() {
     state         = [];
     convId        = null;
@@ -221,7 +206,7 @@ class ChatNotifier extends StateNotifier<List<MensajeModel>> {
     await _service.enviarMensaje(convId!, texto);
   }
 
-  /// Streaming: crea una burbuja vacía del asistente para ir llenando
+
   void iniciarStreamAsistente() {
     state = [
       ...state,
@@ -235,7 +220,7 @@ class ChatNotifier extends StateNotifier<List<MensajeModel>> {
     ];
   }
 
-  /// Streaming: actualiza el texto de la última burbuja del asistente
+
   void actualizarStreamAsistente(String contenido) {
     if (state.isEmpty || state.last.rol != 'ASISTENTE') return;
     final ultimo = state.last;
@@ -251,12 +236,10 @@ class ChatNotifier extends StateNotifier<List<MensajeModel>> {
     ];
   }
 
-  /// Streaming: finaliza con el texto completo.
-  /// FIX: si contenidoFinal está vacío (timeout antes del primer chunk),
-  /// eliminar la burbuja del asistente en lugar de dejar una burbuja vacía visible.
+
   void finalizarStreamAsistente(String contenidoFinal) {
     if (contenidoFinal.isEmpty) {
-      // Eliminar la burbuja vacía de streaming si existe
+
       if (state.isNotEmpty && state.last.rol == 'ASISTENTE' &&
           state.last.contenido.isEmpty) {
         state = state.sublist(0, state.length - 1);
@@ -272,9 +255,8 @@ class ChatNotifier extends StateNotifier<List<MensajeModel>> {
 
   void agregarRespuesta(String contenido) {
     if (contenido.isEmpty) return;
-    // streaming ya entregó la misma respuesta. Compara por contenido exacto
-    // con cualquier mensaje del asistente reciente (no solo el último),
-    // porque el polling puede llegar después de que _terminarEspera() limpió timers.
+
+
     final yaExiste = state.any((m) =>
         m.rol == 'ASISTENTE' && m.contenido == contenido);
     if (yaExiste) return;
@@ -298,9 +280,7 @@ class ChatNotifier extends StateNotifier<List<MensajeModel>> {
   }
 }
 
-// streaming. Si se destruye al navegar fuera, la conversación activa en el
-// backend queda huérfana (sigue procesando pero nadie escucha los eventos WS).
-// Al volver, chat_screen llama _iniciar() que ya hace limpiar() + nueva conv.
+
 final chatProvider = StateNotifierProvider<ChatNotifier, List<MensajeModel>>(
   (ref) => ChatNotifier(ref.watch(chatbotServiceProvider)),
 );

@@ -91,7 +91,6 @@ class HasPermission(BasePermission):
                     and request.user.tiene_permiso(permiso))
 
 
-# Aliases de compatibilidad para vistas existentes
 IsAdmin        = IsSupervisor
 IsAdminOrLider = IsSupervisorOrAuditor
 IsInternalUser = IsPersonalInterno

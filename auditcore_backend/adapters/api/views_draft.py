@@ -1,9 +1,3 @@
-"""
-adapters/api/views_draft.py
-============================
-Views para el flujo de borrador (draft) de creación de clientes.
-Separadas de views.py para mantener el archivo principal manejable.
-"""
 import logging
 
 from rest_framework.views import APIView
@@ -16,12 +10,8 @@ logger = logging.getLogger(__name__)
 
 
 class ClienteDraftCreateView(APIView):
-    """
-    POST /api/clientes/draft/
-    Crea un borrador en Redis con los datos del Paso 1.
-    No escribe nada en PostgreSQL.
-    Response: { draft_id: "<uuid>" }
-    """
+
+
     permission_classes = [CanCreateClientes]
 
     def post(self, request):
@@ -37,12 +27,8 @@ class ClienteDraftCreateView(APIView):
 
 
 class ClienteDraftUpdateView(APIView):
-    """
-    PATCH /api/clientes/draft/{draft_id}/
-    Actualiza (merge) el borrador en Redis con los datos del paso actual.
-    No escribe en PostgreSQL. Renueva TTL de 24 horas.
-    Response: { draft_id: "<uuid>" }
-    """
+
+
     permission_classes = [CanCreateClientes]
 
     def patch(self, request, draft_id):
@@ -57,12 +43,8 @@ class ClienteDraftUpdateView(APIView):
 
 
 class ClienteDraftCommitView(APIView):
-    """
-    POST /api/clientes/draft/{draft_id}/commit/
-    Persiste el borrador completo en PostgreSQL y borra el draft de Redis.
-    Se llama una sola vez, al final del Paso 6.
-    Response: { cliente: {...}, warnings: [...] }
-    """
+
+
     permission_classes = [CanCreateClientes]
 
     def post(self, request, draft_id):
@@ -72,7 +54,7 @@ class ClienteDraftCommitView(APIView):
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_404_NOT_FOUND)
         except Exception as exc:
-            # Detectar errores comunes de BD para dar mensajes claros al usuario
+
             exc_str = str(exc).lower()
             if 'unique' in exc_str and 'nit' in exc_str:
                 return Response(
@@ -93,7 +75,7 @@ class ClienteDraftCommitView(APIView):
         cliente  = result['cliente']
         warnings = result['warnings']
 
-        # Disparar acceso de caracterización si hay contacto con email
+
         contacto = result.get('contacto')
         if contacto and contacto.email:
             try:

@@ -15,7 +15,7 @@ class CertificacionesScreen extends ConsumerWidget {
     final authState  = ref.watch(authProvider);
     final usuario    = authState.valueOrNull;
     final certsAsync = ref.watch(certificacionesProvider);
-    // Fix: 'SUPERVISOR' estaba duplicado — el botón nunca aparecía para ASESOR
+
     final esAdminOLider = ['SUPERVISOR', 'ASESOR'].contains(usuario?.rol ?? '');
 
     return AppShell(
@@ -68,8 +68,8 @@ class CertificacionesScreen extends ConsumerWidget {
                 separatorBuilder: (_, __) => const SizedBox(height: 6),
                 itemBuilder: (_, i) {
                   final c = certs[i];
-                  // diasParaVencer es int? (nullable) — extraer a variable local
-                  // y verificar null antes de comparar (null safety de Dart).
+
+
                   final dias    = c.diasParaVencer;
                   final urgente = dias != null && dias > 0 && dias < 30;
                   final vencida = c.estado == 'VENCIDA';
@@ -99,7 +99,7 @@ class CertificacionesScreen extends ConsumerWidget {
                                   fontSize: 11, color: AppColors.textTertiary)),
                           const SizedBox(height: 10),
 
-                          // Vencimiento
+
                           Row(children: [
                             Icon(Icons.calendar_today_outlined,
                                 size: 13,
@@ -123,7 +123,7 @@ class CertificacionesScreen extends ConsumerWidget {
                                     : FontWeight.normal,
                               ),
                             ),
-                            // Mostrar badge de días solo si hay valor y es urgente
+
                             if (urgente && dias != null) ...[
                               const SizedBox(width: 8),
                               Container(
@@ -143,7 +143,7 @@ class CertificacionesScreen extends ConsumerWidget {
                             ],
                           ]),
 
-                          // Acciones
+
                           const SizedBox(height: 10),
                           Row(children: [
                             if (c.certificadoPdf == null)

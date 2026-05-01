@@ -3,56 +3,78 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.db import models
 
 
+PERM_CLIENTES_VER          = 'clientes.ver'
+PERM_CLIENTES_CREAR        = 'clientes.crear'
+PERM_CLIENTES_EDITAR       = 'clientes.editar'
+PERM_EXPEDIENTES_VER       = 'expedientes.ver'
+PERM_EXPEDIENTES_CREAR     = 'expedientes.crear'
+PERM_EXPEDIENTES_EDITAR    = 'expedientes.editar'
+PERM_HALLAZGOS_VER         = 'hallazgos.ver'
+PERM_HALLAZGOS_CREAR       = 'hallazgos.crear'
+PERM_HALLAZGOS_EDITAR      = 'hallazgos.editar'
+PERM_DOCUMENTOS_VER        = 'documentos.ver'
+PERM_DOCUMENTOS_APROBAR    = 'documentos.aprobar'
+PERM_CERTIFICACIONES_VER   = 'certificaciones.ver'
+PERM_CERTIFICACIONES_EMITIR = 'certificaciones.emitir'
+PERM_FORMULARIOS_VER       = 'formularios.ver'
+PERM_FORMULARIOS_CREAR     = 'formularios.crear'
+PERM_FORMULARIOS_EDITAR    = 'formularios.editar'
+PERM_REPORTES_VER          = 'reportes.ver'
+PERM_REPORTES_EXPORTAR     = 'reportes.exportar'
+PERM_PROCEDIMIENTOS_VER    = 'procedimientos.ver'
+PERM_PROCEDIMIENTOS_CREAR  = 'procedimientos.crear'
+
+
 PERMISOS_POR_ROL = {
     'SUPERVISOR': [
         'usuarios.ver', 'usuarios.crear', 'usuarios.editar', 'usuarios.eliminar',
-        'clientes.ver', 'clientes.crear', 'clientes.editar',
-        'expedientes.ver', 'expedientes.crear', 'expedientes.editar',
-        'hallazgos.ver', 'hallazgos.crear', 'hallazgos.editar',
-        'documentos.ver', 'documentos.aprobar',
-        'certificaciones.ver', 'certificaciones.emitir',
-        'formularios.ver', 'formularios.crear', 'formularios.editar',
-        'reportes.ver', 'reportes.exportar',
-        'procedimientos.ver', 'procedimientos.crear',
+        PERM_CLIENTES_VER, PERM_CLIENTES_CREAR, PERM_CLIENTES_EDITAR,
+        PERM_EXPEDIENTES_VER, PERM_EXPEDIENTES_CREAR, PERM_EXPEDIENTES_EDITAR,
+        PERM_HALLAZGOS_VER, PERM_HALLAZGOS_CREAR, PERM_HALLAZGOS_EDITAR,
+        PERM_DOCUMENTOS_VER, PERM_DOCUMENTOS_APROBAR,
+        PERM_CERTIFICACIONES_VER, PERM_CERTIFICACIONES_EMITIR,
+        PERM_FORMULARIOS_VER, PERM_FORMULARIOS_CREAR, PERM_FORMULARIOS_EDITAR,
+        PERM_REPORTES_VER, PERM_REPORTES_EXPORTAR,
+        PERM_PROCEDIMIENTOS_VER, PERM_PROCEDIMIENTOS_CREAR,
         'caracterizacion.ver', 'caracterizacion.aprobar',
         'acceso_temporal.crear',
     ],
     'ASESOR': [
-        'clientes.ver', 'clientes.crear', 'clientes.editar',
-        'expedientes.ver',
-        'certificaciones.ver',
-        'formularios.ver',
-        'reportes.ver',
+        PERM_CLIENTES_VER, PERM_CLIENTES_CREAR, PERM_CLIENTES_EDITAR,
+        PERM_EXPEDIENTES_VER,
+        PERM_CERTIFICACIONES_VER,
+        PERM_FORMULARIOS_VER,
+        PERM_REPORTES_VER,
         'caracterizacion.ver',
         'acceso_temporal.crear',
     ],
     'AUDITOR': [
-        'clientes.ver',
-        'expedientes.ver', 'expedientes.crear', 'expedientes.editar',
-        'hallazgos.ver', 'hallazgos.crear', 'hallazgos.editar',
-        'documentos.ver', 'documentos.aprobar',
-        'certificaciones.ver', 'certificaciones.emitir',
-        'formularios.ver',
-        'procedimientos.ver', 'procedimientos.crear',
-        'reportes.ver',
+        PERM_CLIENTES_VER,
+        PERM_EXPEDIENTES_VER, PERM_EXPEDIENTES_CREAR, PERM_EXPEDIENTES_EDITAR,
+        PERM_HALLAZGOS_VER, PERM_HALLAZGOS_CREAR, PERM_HALLAZGOS_EDITAR,
+        PERM_DOCUMENTOS_VER, PERM_DOCUMENTOS_APROBAR,
+        PERM_CERTIFICACIONES_VER, PERM_CERTIFICACIONES_EMITIR,
+        PERM_FORMULARIOS_VER,
+        PERM_PROCEDIMIENTOS_VER, PERM_PROCEDIMIENTOS_CREAR,
+        PERM_REPORTES_VER,
     ],
     'AUXILIAR': [
-        'expedientes.ver',
-        'hallazgos.ver',
-        'documentos.ver',
-        'formularios.ver',
-        'procedimientos.ver', 'procedimientos.crear',
-        'reportes.ver',
+        PERM_EXPEDIENTES_VER,
+        PERM_HALLAZGOS_VER,
+        PERM_DOCUMENTOS_VER,
+        PERM_FORMULARIOS_VER,
+        PERM_PROCEDIMIENTOS_VER, PERM_PROCEDIMIENTOS_CREAR,
+        PERM_REPORTES_VER,
     ],
     'REVISOR': [
-        'clientes.ver',
-        'expedientes.ver',
-        'hallazgos.ver',
-        'documentos.ver',
-        'certificaciones.ver',
-        'formularios.ver',
-        'procedimientos.ver',
-        'reportes.ver', 'reportes.exportar',
+        PERM_CLIENTES_VER,
+        PERM_EXPEDIENTES_VER,
+        PERM_HALLAZGOS_VER,
+        PERM_DOCUMENTOS_VER,
+        PERM_CERTIFICACIONES_VER,
+        PERM_FORMULARIOS_VER,
+        PERM_PROCEDIMIENTOS_VER,
+        PERM_REPORTES_VER, PERM_REPORTES_EXPORTAR,
     ],
     'CLIENTE': [
         'expedientes.ver_propio',

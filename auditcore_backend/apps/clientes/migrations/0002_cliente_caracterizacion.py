@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # ── 1. Crear SedeCliente PRIMERO (ContactoCliente.sede lo referencia) ──
+
         migrations.CreateModel(
             name='SedeCliente',
             fields=[
@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
             options={'db_table': 'sedes_cliente', 'ordering': ['-es_principal', 'nombre']},
         ),
 
-        # ── 2. Nuevos campos en Cliente ────────────────────────────────────────
+
         migrations.AddField(model_name='cliente', name='tipo_persona',
             field=models.CharField(
                 choices=[('JURIDICA', 'Persona Jurídica'), ('NATURAL', 'Persona Natural')],
@@ -146,7 +146,7 @@ class Migration(migrations.Migration):
                     ('SEGUROS', 'Seguros'), ('OTRO', 'Otro'),
                 ])),
 
-        # ── 3. Nuevos campos en ContactoCliente (SedeCliente ya existe) ────────
+
         migrations.AddField(model_name='contactocliente', name='tipo',
             field=models.CharField(
                 default='OPERATIVO', max_length=15,
@@ -175,7 +175,7 @@ class Migration(migrations.Migration):
                 to='clientes.sedecliente',
             )),
 
-        # ── 4. Crear AccesoTemporalCaracterizacion ─────────────────────────────
+
         migrations.CreateModel(
             name='AccesoTemporalCaracterizacion',
             fields=[

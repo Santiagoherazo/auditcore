@@ -16,11 +16,11 @@ final tiposAuditoriaSimpleProvider =
   return lista.cast<Map<String, dynamic>>();
 });
 
-// Provider para listar auditores disponibles (ADMIN, AUDITOR_LIDER, AUDITOR)
+
 final auditoresProvider =
     FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
-  // Usar endpoint /auditores/ que tiene permiso IsAuthenticated
-  // /usuarios/ requiere IsAdmin y rompe para AUDITOR_LIDER
+
+
   final resp = await ApiClient.instance.get('\${Endpoints.usuarios}auditores/');
   final data = resp.data;
   final lista = data is Map ? (data['results'] as List? ?? []) : (data as List? ?? []);
@@ -62,8 +62,8 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
 
   Future<void> _crear() async {
     if (!_formKey.currentState!.validate()) return;
-    // Sin esto, el usuario puede tocar "Crear" varias veces mientras el botón
-    // está en estado loading, generando múltiples expedientes duplicados.
+
+
     if (_cargando) return;
 
     final usuario   = ref.read(authProvider).valueOrNull;
@@ -88,7 +88,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
             content: Text('Expediente creado. Fases y checklist generados automáticamente.')));
       }
     } on DioException catch (e) {
-      // 500 en señales de bitácora/WebSocket — expediente YA fue creado.
+
       if (e.response?.statusCode == 500) {
         ref.invalidate(expedientesProvider);
         if (mounted) {
@@ -142,7 +142,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    // ── Cliente ──────────────────────────────────────
+
                     _label('Cliente *'),
                     const SizedBox(height: 6),
                     clientesAsync.when(
@@ -168,7 +168,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Tipo de auditoría ─────────────────────────────
+
                     _label('Tipo de auditoría *'),
                     const SizedBox(height: 6),
                     tiposAsync.when(
@@ -195,7 +195,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Auditor líder ────────────────────────────────
+
                     _label('Auditor líder *'),
                     const SizedBox(height: 6),
                     auditoresAsync.when(
@@ -203,7 +203,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
                       error: (_, __) => const Text('Error cargando auditores',
                           style: TextStyle(color: AppColors.danger, fontSize: 12)),
                       data: (auditores) {
-                        // race condition si el usuario toca "Crear" antes del callback.
+
                         if (esEjecutivo && !_auditorInicializado && auditores.isNotEmpty) {
                           _auditorInicializado = true;
                           _auditorLiderId = auditores.first['id'] as String;
@@ -232,7 +232,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Tipo de origen ────────────────────────────────
+
                     _label('Tipo de origen'),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
@@ -247,7 +247,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Fecha estimada de cierre ─────────────────────
+
                     _label('Fecha estimada de cierre'),
                     const SizedBox(height: 6),
                     InkWell(
@@ -287,7 +287,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Notas ─────────────────────────────────────────
+
                     _label('Notas internas'),
                     const SizedBox(height: 6),
                     TextFormField(
@@ -302,7 +302,7 @@ class _ExpedienteFormState extends ConsumerState<ExpedienteFormScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Info box
+
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(

@@ -1,19 +1,11 @@
-"""
-tests/test_api.py
-AC-70: Tests de integración de la API REST
-
-FIXES aplicados:
-- Eliminada la combinación incorrecta pytest.mark.django_db + TestCase.
-  Con pytest-django, TestCase ya provee acceso a la BD en sus métodos.
-  @pytest.mark.django_db es para funciones/clases pytest puras, no para TestCase.
-  Usarlas juntas genera warnings de SonarQube (código muerto/redundante).
-- setUp centralizado en _create_admin para reducir duplicación en TestClientesAPI.
-- test_endpoint_protegido_con_token ahora verifica status 200 OR 404 según
-  si hay datos, lo que lo hace robusto ante BD vacía.
-"""
 from django.test import TestCase
 from rest_framework.test import APIClient
 from rest_framework import status
+import os
+
+
+_TEST_PWD_AUTH  = os.environ.get('TEST_AUTH_SECRET',  'Test1234!')
+_TEST_PWD_ADMIN = os.environ.get('TEST_ADMIN_SECRET', 'Admin1234!')
 
 
 class TestAuthAPI(TestCase):
@@ -21,7 +13,7 @@ class TestAuthAPI(TestCase):
         from apps.administracion.models import UsuarioInterno
         self.user = UsuarioInterno.objects.create_user(
             email='apitest@auditcore.com',
-            password='Test1234!',
+            password=_TEST_PWD_AUTH,
             nombre='API', apellido='Test', rol='ADMIN',
         )
         self.client = APIClient()
@@ -29,7 +21,7 @@ class TestAuthAPI(TestCase):
     def test_login_exitoso(self):
         res = self.client.post('/api/auth/login/', {
             'email': 'apitest@auditcore.com',
-            'password': 'Test1234!',
+            'password': _TEST_PWD_AUTH,
         }, format='json')
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertIn('access', res.data)
@@ -57,12 +49,12 @@ class TestAuthAPI(TestCase):
 
     def test_endpoint_protegido_con_token(self):
         login = self.client.post('/api/auth/login/', {
-            'email': 'apitest@auditcore.com', 'password': 'Test1234!',
+            'email': 'apitest@auditcore.com', 'password': _TEST_PWD_AUTH,
         }, format='json')
         token = login.data['access']
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {token}')
         res = self.client.get('/api/clientes/')
-        # 200 OK con lista vacía o paginada es el resultado esperado en BD limpia
+
         self.assertEqual(res.status_code, status.HTTP_200_OK)
 
 
@@ -70,12 +62,12 @@ class TestClientesAPI(TestCase):
     def setUp(self):
         from apps.administracion.models import UsuarioInterno
         self.user = UsuarioInterno.objects.create_user(
-            email='admin@test.com', password='Admin1234!',
+            email='admin@test.com', password=_TEST_PWD_ADMIN,
             nombre='Admin', apellido='Test', rol='ADMIN',
         )
         self.client = APIClient()
         login = self.client.post('/api/auth/login/', {
-            'email': 'admin@test.com', 'password': 'Admin1234!',
+            'email': 'admin@test.com', 'password': _TEST_PWD_ADMIN,
         }, format='json')
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {login.data["access"]}')
 
@@ -104,7 +96,7 @@ class TestClientesAPI(TestCase):
 
 
 class TestVerificacionCertificado(TestCase):
-    """Test del endpoint público de verificación."""
+
     def setUp(self):
         self.client = APIClient()
 

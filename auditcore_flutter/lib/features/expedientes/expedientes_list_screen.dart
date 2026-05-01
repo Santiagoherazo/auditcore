@@ -12,8 +12,7 @@ import '../../core/services/websocket_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
-// Antes no existía este provider y las evidencias nunca aparecían en el tab
-// de documentos del expediente — solo aparecían DocumentoExpediente formales.
+
 final evidenciasExpedienteProvider =
     FutureProvider.autoDispose.family<List<Map<String, dynamic>>, String>(
   (ref, expedienteId) async {
@@ -27,7 +26,7 @@ final evidenciasExpedienteProvider =
   },
 );
 
-// ── Lista de Expedientes ─────────────────────────────────────────────────
+
 class ExpedientesListScreen extends ConsumerStatefulWidget {
   const ExpedientesListScreen({super.key});
   @override
@@ -70,7 +69,7 @@ class _ExpedientesListState extends ConsumerState<ExpedientesListScreen> {
           ),
       ],
       child: Column(children: [
-        // Filtros
+
         Container(
           color: AppColors.white,
           padding: const EdgeInsets.all(14),
@@ -201,7 +200,7 @@ class _ExpedienteTile extends StatelessWidget {
   }
 }
 
-// ── Detalle del Expediente ───────────────────────────────────────────────
+
 class ExpedienteDetailScreen extends ConsumerStatefulWidget {
   final String id;
   const ExpedienteDetailScreen({super.key, required this.id});
@@ -213,14 +212,14 @@ class _ExpedienteDetailState extends ConsumerState<ExpedienteDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabs;
   bool _conectado = false;
-  StreamSubscription? _wsSub;  // FIX: guardar sub para cancelarla en dispose
+  StreamSubscription? _wsSub;
 
   @override
   void initState() {
     super.initState();
     _tabs = TabController(length: 6, vsync: this);
     wsExpediente.connect('ws/expediente/${widget.id}/');
-    // listeners que invalidaban providers de expedientes ya cerrados.
+
     _wsSub = wsExpediente.stream.listen((event) {
       if (!mounted) return;
       setState(() => _conectado = true);
@@ -254,7 +253,7 @@ class _ExpedienteDetailState extends ConsumerState<ExpedienteDetailScreen>
       titulo: expAsync.valueOrNull?.numeroExpediente ?? 'Expediente',
       subtitulo: expAsync.valueOrNull?.clienteNombre,
       actions: [
-        // Indicador en vivo
+
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -281,7 +280,7 @@ class _ExpedienteDetailState extends ConsumerState<ExpedienteDetailScreen>
         const SizedBox(width: 8),
       ],
       child: Column(children: [
-        // TabBar fijo arriba del contenido
+
         Container(
           color: AppColors.white,
           child: TabBar(
@@ -307,9 +306,9 @@ class _ExpedienteDetailState extends ConsumerState<ExpedienteDetailScreen>
             data: (exp) => TabBarView(controller: _tabs, children: [
               _TabResumen(exp: exp),
               _TabHallazgos(expedienteId: widget.id),
-              _TabDocumentos(expedienteId: widget.id),   // FIX: alineado con tab "Documentos"
-              _TabFases(exp: exp),                        // FIX: alineado con tab "Fases"
-              _TabChecklist(expedienteId: widget.id),    // FIX: alineado con tab "Checklist"
+              _TabDocumentos(expedienteId: widget.id),
+              _TabFases(exp: exp),
+              _TabChecklist(expedienteId: widget.id),
               _TabBitacora(expedienteId: widget.id),
             ]),
           ),
@@ -319,7 +318,7 @@ class _ExpedienteDetailState extends ConsumerState<ExpedienteDetailScreen>
   }
 }
 
-// ── Tab Resumen ──────────────────────────────────────────────────────────
+
 class _TabResumen extends StatelessWidget {
   final ExpedienteModel exp;
   const _TabResumen({required this.exp});
@@ -407,7 +406,7 @@ class _InfoRow extends StatelessWidget {
   );
 }
 
-// ── Tab Hallazgos ────────────────────────────────────────────────────────
+
 class _TabHallazgos extends ConsumerWidget {
   final String expedienteId;
   const _TabHallazgos({required this.expedienteId});
@@ -529,7 +528,7 @@ class _CambiarEstadoButton extends ConsumerWidget {
   }
 }
 
-// ── Tab Checklist ────────────────────────────────────────────────────────
+
 class _TabChecklist extends ConsumerWidget {
   final String expedienteId;
   const _TabChecklist({required this.expedienteId});
@@ -558,13 +557,13 @@ class _TabChecklist extends ConsumerWidget {
           );
         }
 
-        // Agrupar por categoría
+
         final Map<String, List<ChecklistEjecucionModel>> grupos = {};
         for (final item in items) {
           grupos.putIfAbsent(item.descripcion.isNotEmpty ? 'Criterios' : 'General', () => []).add(item);
         }
 
-        // Resumen de estado
+
         final total      = items.length;
         final cumple     = items.where((i) => i.estado == 'CUMPLE').length;
         final noCumple   = items.where((i) => i.estado == 'NO_CUMPLE').length;
@@ -573,7 +572,7 @@ class _TabChecklist extends ConsumerWidget {
         return ListView(
           padding: const EdgeInsets.all(14),
           children: [
-            // Resumen
+
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(14),
@@ -587,7 +586,7 @@ class _TabChecklist extends ConsumerWidget {
             ),
             const SizedBox(height: 10),
 
-            // Items
+
             ...items.map((item) => Padding(
               padding: const EdgeInsets.only(bottom: 6),
               child: Card(
@@ -639,7 +638,7 @@ class _ChecklistStat extends StatelessWidget {
   );
 }
 
-// ── Tab Documentos (nuevo) ───────────────────────────────────────────────
+
 class _TabDocumentos extends ConsumerStatefulWidget {
   final String expedienteId;
   const _TabDocumentos({required this.expedienteId});
@@ -762,7 +761,7 @@ class _TabDocumentosState extends ConsumerState<_TabDocumentos> {
     final evidAsync      = ref.watch(evidenciasExpedienteProvider(widget.expedienteId));
 
     return Column(children: [
-      // Botón subir
+
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
         child: SizedBox(
@@ -784,8 +783,8 @@ class _TabDocumentosState extends ConsumerState<_TabDocumentos> {
             onBoton: () => ref.invalidate(documentosExpedienteProvider(widget.expedienteId)),
           ),
           data: (docs) {
-            // Antes solo aparecían DocumentoExpediente, las Evidencias subidas
-            // en hallazgos nunca eran visibles aquí.
+
+
             final evidencias = evidAsync.valueOrNull ?? [];
             final todasEvidencias = evidencias.map((e) => <String, dynamic>{
               'id':       e['id'],
@@ -869,7 +868,7 @@ class _TabDocumentosState extends ConsumerState<_TabDocumentos> {
   };
 }
 
-// ── Tab Fases ────────────────────────────────────────────────────────────
+
 class _TabFases extends StatelessWidget {
   final ExpedienteModel exp;
   const _TabFases({required this.exp});
@@ -928,7 +927,7 @@ class _TabFases extends StatelessWidget {
   }
 }
 
-// ── Tab Bitácora ─────────────────────────────────────────────────────────
+
 class _TabBitacora extends ConsumerStatefulWidget {
   final String expedienteId;
   const _TabBitacora({required this.expedienteId});
@@ -937,8 +936,8 @@ class _TabBitacora extends ConsumerStatefulWidget {
 }
 
 class _TabBitacoraState extends ConsumerState<_TabBitacora> {
-  // Antes el tab era de solo lectura — no había forma de agregar anotaciones
-  // desde la app sin crear un hallazgo o cambiar el estado del expediente.
+
+
   Future<void> _agregarNota() async {
     final ctrl = TextEditingController();
     final confirmado = await showDialog<bool>(
@@ -976,7 +975,7 @@ class _TabBitacoraState extends ConsumerState<_TabBitacora> {
       );
       ref.invalidate(bitacoraProvider(widget.expedienteId));
     } catch (e) {
-      // Fallback: si el endpoint no existe aún, mostrar aviso
+
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('Error al guardar nota: $e'),
           backgroundColor: AppColors.danger));
@@ -987,7 +986,7 @@ class _TabBitacoraState extends ConsumerState<_TabBitacora> {
   Widget build(BuildContext context) {
     final async = ref.watch(bitacoraProvider(widget.expedienteId));
     return Column(children: [
-      // Barra de acciones
+
       Padding(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 4),
         child: SizedBox(
@@ -1016,7 +1015,7 @@ class _TabBitacoraState extends ConsumerState<_TabBitacora> {
                   separatorBuilder: (_, __) => const Divider(height: 1),
                   itemBuilder: (_, i) {
                     final b = lista[i];
-                    // Diferenciar notas manuales de eventos automáticos
+
                     final esNota = b.accion == 'NOTA_MANUAL';
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(

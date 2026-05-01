@@ -40,8 +40,8 @@ class Certificacion(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.numero:
-            # Generación de número atómica con select_for_update para evitar
-            # race conditions entre inserts concurrentes (misma solución que Expediente).
+
+
             from django.db import transaction as db_transaction
             from django.db.models import Max
             with db_transaction.atomic():
@@ -68,8 +68,8 @@ class Certificacion(models.Model):
 
     @property
     def dias_para_vencer(self):
-        # FIX: proteger contra fecha_vencimiento None (datos corruptos o migración parcial).
-        # Sin esta guarda, cualquier endpoint que serialice la certificación lanza TypeError → 500.
+
+
         if not self.fecha_vencimiento:
             return None
         return (self.fecha_vencimiento - timezone.now().date()).days
@@ -78,7 +78,6 @@ class Certificacion(models.Model):
         return f'{self.numero} — {self.cliente.razon_social}'
 
 
-# AlertaCertificacion must be defined BEFORE the signal that references it
 class AlertaCertificacion(models.Model):
     TIPO_CHOICES = [('90_DIAS','90 días'),('60_DIAS','60 días'),('30_DIAS','30 días'),('VENCIDA','Vencida')]
     CANAL_CHOICES = [('EMAIL','Email'),('PUSH','Push'),('SISTEMA','Sistema'),('TODOS','Todos')]
@@ -95,7 +94,6 @@ class AlertaCertificacion(models.Model):
         db_table = 'alertas_certificacion'
 
 
-# Signal defined AFTER AlertaCertificacion so the class is available
 @receiver(post_save, sender=Certificacion)
 def crear_alertas_automaticas(sender, instance, created, **kwargs):
     if created:

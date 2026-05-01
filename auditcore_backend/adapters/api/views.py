@@ -23,21 +23,18 @@ try:
     _IDS_CELERY = _IDS.CELERY
     _IDS_ERROR  = _IDS.ERROR
 except ImportError:
-    def _ids_log(*a, **kw): pass       # type: ignore[misc]
-    def _broker_diag(*a, **kw): pass   # type: ignore[misc]
-    def _new_trace_id(): return 'na'   # type: ignore[misc]
+    def _ids_log(*a, **kw): pass
+    def _broker_diag(*a, **kw): pass
+    def _new_trace_id(): return 'na'
     _IDS_API    = 'API'
     _IDS_CELERY = 'CELERY'
     _IDS_ERROR  = 'ERROR'
 
-# Excepciones de broker — capturadas explícitamente en los endpoints que
-# encolan tareas Celery. Capturar solo `Exception` oculta bugs reales (TypeError,
-# AttributeError, etc.) que deberían llegar al log como 500. Capturar solo estas
-# excepciones garantiza que errores de código sigan propagándose correctamente.
+
 try:
     from kombu.exceptions import OperationalError as KombuOperationalError
-except ImportError:  # pragma: no cover
-    KombuOperationalError = OSError  # fallback si kombu cambia su API pública
+except ImportError:
+    KombuOperationalError = OSError
 
 _BROKER_ERRORS = (KombuOperationalError, OSError, ConnectionError, TimeoutError)
 
@@ -48,7 +45,7 @@ _MSG_BROKER_NO_DISPONIBLE = (
 
 from apps.administracion.models import UsuarioInterno
 from apps.clientes.models import Cliente, SedeCliente, ContactoCliente, AccesoTemporalCaracterizacion
-from apps.tipos_auditoria.models import TipoAuditoria
+from apps.tipos_auditoria.models import TipoAuditoria, FaseTipoAuditoria, ChecklistItem, DocumentoRequerido
 from apps.formularios.models import EsquemaFormulario, ValorFormulario
 from apps.expedientes.models import Expediente, BitacoraExpediente
 from apps.ejecucion.models import Hallazgo, Evidencia, ChecklistEjecucion
@@ -60,7 +57,7 @@ from adapters.api.serializers import (
     UsuarioInternoSerializer, UsuarioInternoCreateSerializer,
     ClienteSerializer, ClienteListSerializer, SedeClienteSerializer,
     ContactoClienteSerializer, AccesoTemporalSerializer,
-    TipoAuditoriaSerializer,
+    TipoAuditoriaSerializer, FaseTipoSerializer, ChecklistItemSerializer, DocumentoRequeridoSerializer,
     EsquemaFormularioSerializer, ValorFormularioSerializer,
     ExpedienteSerializer, ExpedienteListSerializer, BitacoraSerializer,
     FaseExpedienteSerializer, AsignacionSerializer,
@@ -76,11 +73,16 @@ try:
         log_task_enqueue,
     )
 except ImportError:
-    def alog(*a, **kw): pass
-    def new_op_id(): return ''
-    def log_doc_upload(*a, **kw): pass
-    def log_doc_review(*a, **kw): pass
-    def log_task_enqueue(*a, **kw): pass
+    def alog(*a, **kw):
+        pass
+    def new_op_id():
+        return ''
+    def log_doc_upload(*a, **kw):
+        pass
+    def log_doc_review(*a, **kw):
+        pass
+    def log_task_enqueue(*a, **kw):
+        pass
 
 from adapters.api.permissions import (
     IsSupervisor, IsSupervisorOrAsesor, IsSupervisorOrAuditor,
@@ -91,16 +93,9 @@ from adapters.api.permissions import (
 )
 
 
-# ── Helpers internos ──────────────────────────────────────────────────────────
-
 def _blacklist_user_tokens(user) -> None:
-    """Revoca todos los tokens JWT activos del usuario dado.
 
-    Centraliza la lógica de blacklist que antes se duplicaba en
-    _soft_delete, perform_update y desactivar de UsuarioInternoViewSet.
-    Si el módulo token_blacklist no está instalado o la BD falla,
-    los tokens expirarán por su propio TTL (ACCESS_TOKEN_LIFETIME).
-    """
+
     try:
         from rest_framework_simplejwt.token_blacklist.models import (
             OutstandingToken, BlacklistedToken,
@@ -108,29 +103,13 @@ def _blacklist_user_tokens(user) -> None:
         for token in OutstandingToken.objects.filter(user=user):
             BlacklistedToken.objects.get_or_create(token=token)
     except Exception:
-        pass  # Si blacklist no disponible, los tokens expirarán naturalmente
+        pass
 
-
-# ── Soft Delete Mixin ─────────────────────────────────────────────────────────
-# Por estándar, NADA se elimina físicamente. Cada modelo usa su campo semántico:
-#   UsuarioInterno   → estado = 'INACTIVO', is_active = False
-#   Cliente          → estado = 'INACTIVO'
-#   TipoAuditoria    → activo = False
-#   Expediente       → estado = 'CANCELADO'
-#   Hallazgo         → estado = 'CERRADO'
-#   Documento        → estado = 'RECHAZADO'  (lógica: el doc queda pero no aplica)
-#   Certificacion    → estado = 'REVOCADA'
-#   Conversacion     → estado = 'CERRADA'
-#   ChecklistEjec.   → no se elimina (es trazabilidad)
-#   Evidencia        → no se elimina (es evidencia auditada)
 
 class SoftDeleteMixin:
-    """
-    Reemplaza destroy() con eliminación virtual.
-    Cada ViewSet que herede este mixin debe definir _soft_delete(instance)
-    con la lógica de desactivación específica de su modelo.
-    """
-    def destroy(self, request, *args, **kwargs):
+
+
+    def destroy(self, *args, **kwargs):
         instance = self.get_object()
         self._soft_delete(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -161,14 +140,14 @@ class UsuarioInternoViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         return UsuarioInternoSerializer
 
     def perform_update(self, serializer):
-        """PATCH — solo actualiza campos enviados; si is_active cambia, invalida tokens."""
+
         instance = serializer.save()
         if not instance.is_active:
             _blacklist_user_tokens(instance)
-    
+
     @action(detail=True, methods=['post'], url_path='activar')
     def activar(self, request, pk=None):
-        """Reactiva un usuario previamente desactivado."""
+
         usuario = self.get_object()
         usuario.estado    = 'ACTIVO'
         usuario.is_active = True
@@ -179,10 +158,8 @@ class UsuarioInternoViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def me(self, request):
-        # sus datos normalmente. El middleware WS ya rechaza usuarios no activos,
-        # pero el endpoint HTTP no lo hacía — inconsistencia entre capas.
-        # Devolver 403 aquí permite que Flutter detecte la sesión inválida y
-        # redirija al login en AuthNotifier.cargarUsuario().
+
+
         if request.user.estado != 'ACTIVO':
             return Response(
                 {'detail': 'Cuenta inactiva o bloqueada. Contacta al administrador.'},
@@ -192,11 +169,8 @@ class UsuarioInternoViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def auditores(self, request):
-        """
-        GET /api/usuarios/auditores/
-        Lista auditores activos — accesible para cualquier usuario autenticado.
-        Usado por el formulario de expedientes para seleccionar auditor_lider.
-        """
+
+
         qs = UsuarioInterno.objects.filter(
             rol__in=['SUPERVISOR', 'AUDITOR'],
             estado='ACTIVO',
@@ -211,8 +185,8 @@ class UsuarioInternoViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         usuario.estado    = 'INACTIVO'
         usuario.is_active = False
         usuario.save(update_fields=['estado', 'is_active'])
-        # Forzar la revocación de todos los outstanding tokens evita que una
-        # cuenta desactivada siga operando hasta que expiren naturalmente.
+
+
         _blacklist_user_tokens(usuario)
         return Response({'detail': 'Usuario desactivado.'})
 
@@ -234,7 +208,7 @@ class ClienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
             return [IsPersonalInterno()]
         if self.action == 'cambiar_estado':
             return [IsSupervisorOrAsesor()]
-        # create, update, partial_update, destroy: solo SUPERVISOR y ASESOR
+
         return [CanCreateClientes()]
 
     def get_queryset(self):
@@ -281,11 +255,8 @@ class ClienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='cambiar-estado',
             permission_classes=[IsSupervisorOrAsesor])
     def cambiar_estado(self, request, pk=None):
-        """
-        POST /api/clientes/{id}/cambiar-estado/
-        Cambia el estado del cliente con validación de transición.
-        Separado del PATCH para que 'estado' pueda ser read_only en el serializer.
-        """
+
+
         cliente      = self.get_object()
         nuevo_estado = request.data.get('estado', '').strip()
         motivo       = request.data.get('motivo', '').strip()
@@ -315,8 +286,6 @@ class ClienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
             'estado_nuevo':    nuevo_estado,
             'motivo':          motivo,
         })
-
-
 
 
 class SedeClienteViewSet(viewsets.ModelViewSet):
@@ -452,13 +421,68 @@ class TipoAuditoriaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         instance.save(update_fields=['activo'])
 
     def get_queryset(self):
-        if self.action == 'list':
-            return TipoAuditoria.objects.filter(activo=True).prefetch_related(
-                'fases', 'checklist_items', 'documentos_requeridos'
-            )
-        return TipoAuditoria.objects.prefetch_related(
+        qs = TipoAuditoria.objects.prefetch_related(
             'fases', 'checklist_items', 'documentos_requeridos'
         )
+        if self.action == 'list':
+
+            user = getattr(self.request, 'user', None)
+            es_admin = user and getattr(user, 'rol', None) == 'SUPERVISOR'
+            if not es_admin:
+                qs = qs.filter(activo=True)
+
+            activo_param = self.request.query_params.get('activo')
+            if activo_param is not None:
+                qs = qs.filter(activo=activo_param.lower() == 'true')
+        return qs
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+
+class FaseTipoAuditoriaViewSet(viewsets.ModelViewSet):
+    serializer_class = FaseTipoSerializer
+
+    def get_queryset(self):
+        qs = FaseTipoAuditoria.objects.select_related('tipo_auditoria').order_by('tipo_auditoria', 'orden')
+        tipo_id = self.request.query_params.get('tipo_auditoria')
+        if tipo_id:
+            qs = qs.filter(tipo_auditoria_id=tipo_id)
+        return qs
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+
+class ChecklistItemViewSet(viewsets.ModelViewSet):
+    serializer_class = ChecklistItemSerializer
+
+    def get_queryset(self):
+        qs = ChecklistItem.objects.select_related('tipo_auditoria', 'fase').order_by('tipo_auditoria', 'orden')
+        tipo_id = self.request.query_params.get('tipo_auditoria')
+        if tipo_id:
+            qs = qs.filter(tipo_auditoria_id=tipo_id)
+        return qs
+
+    def get_permissions(self):
+        if self.action in ('list', 'retrieve'):
+            return [IsAuthenticated()]
+        return [IsAdmin()]
+
+
+class DocumentoRequeridoViewSet(viewsets.ModelViewSet):
+    serializer_class = DocumentoRequeridoSerializer
+
+    def get_queryset(self):
+        qs = DocumentoRequerido.objects.select_related('tipo_auditoria').order_by('tipo_auditoria', 'orden')
+        tipo_id = self.request.query_params.get('tipo_auditoria')
+        if tipo_id:
+            qs = qs.filter(tipo_auditoria_id=tipo_id)
+        return qs
 
     def get_permissions(self):
         if self.action in ('list', 'retrieve'):
@@ -493,6 +517,34 @@ class EsquemaFormularioViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(creado_por=self.request.user, origen='MANUAL')
 
+    @staticmethod
+    def _resolver_origen(ext, mime):
+
+        if ext == 'pdf' or 'pdf' in mime:
+            return 'BOT_PDF'
+        if ext in ('docx', 'doc') or 'word' in mime:
+            return 'BOT_WORD'
+        if ext in ('xlsx', 'xls') or 'excel' in mime or 'spreadsheet' in mime:
+            return 'BOT_EXCEL'
+        return None
+
+    def _encolar_analisis(self, esquema, tmp_path, mime, origen):
+
+        import os
+        from workers.chatbot import analizar_formulario_bot
+        try:
+            analizar_formulario_bot.delay(
+                esquema_id=str(esquema.id),
+                ruta_archivo=tmp_path,
+                mime_type=mime,
+                origen=origen,
+            )
+        except _BROKER_ERRORS:
+            esquema.delete()
+            os.remove(tmp_path)
+            return Response({'error': _MSG_BROKER_NO_DISPONIBLE}, status=503)
+        return None
+
     @action(detail=False, methods=['post'], url_path='importar-bot',
             permission_classes=[IsAdminOrLider])
     def importar_bot(self, request):
@@ -510,26 +562,21 @@ class EsquemaFormularioViewSet(viewsets.ModelViewSet):
         mime = archivo.content_type or ''
         ext  = archivo.name.rsplit('.', 1)[-1].lower() if '.' in archivo.name else ''
 
-        if ext == 'pdf' or 'pdf' in mime:
-            origen = 'BOT_PDF'
-        elif ext in ('docx', 'doc') or 'word' in mime:
-            origen = 'BOT_WORD'
-        elif ext in ('xlsx', 'xls') or 'excel' in mime or 'spreadsheet' in mime:
-            origen = 'BOT_EXCEL'
-        else:
+        origen = self._resolver_origen(ext, mime)
+        if origen is None:
             return Response({'error': f'Tipo de archivo no soportado: {ext}. Use PDF, Word o Excel.'}, status=400)
 
         import os, uuid as _uuid
         from django.conf import settings as djsettings
         tmp_dir  = os.path.join(getattr(djsettings, 'MEDIA_ROOT', '/app/media'), 'formularios_tmp')
         os.makedirs(tmp_dir, exist_ok=True)
-        tmp_path = os.path.join(tmp_dir, f'{_uuid.uuid4().hex}_{archivo.name}')
+        nombre_seguro_bot = os.path.basename(archivo.name)
+        tmp_path = os.path.join(tmp_dir, f'{_uuid.uuid4().hex}_{nombre_seguro_bot}')
         with open(tmp_path, 'wb') as f:
             for chunk in archivo.chunks():
                 f.write(chunk)
 
         try:
-            from workers.chatbot import analizar_formulario_bot
             esquema = EsquemaFormulario.objects.create(
                 nombre=nombre,
                 contexto=contexto,
@@ -538,17 +585,9 @@ class EsquemaFormularioViewSet(viewsets.ModelViewSet):
                 creado_por=request.user,
                 activo=False,
             )
-            try:
-                analizar_formulario_bot.delay(
-                    esquema_id=str(esquema.id),
-                    ruta_archivo=tmp_path,
-                    mime_type=mime,
-                    origen=origen,
-                )
-            except _BROKER_ERRORS as broker_exc:
-                esquema.delete()
-                os.remove(tmp_path)
-                return Response({'error': _MSG_BROKER_NO_DISPONIBLE}, status=503)
+            error_resp = self._encolar_analisis(esquema, tmp_path, mime, origen)
+            if error_resp is not None:
+                return error_resp
             return Response({
                 'detail': 'Formulario en procesamiento. El bot extraerá los campos automáticamente.',
                 'esquema_id': str(esquema.id),
@@ -589,7 +628,7 @@ class ExpedienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         return ExpedienteSerializer
 
     def get_queryset(self):
-        # AnonymousUser no tiene .rol y causa 'AnonymousUser' object has no attribute 'rol'.
+
         if getattr(self, 'swagger_fake_view', False):
             return Expediente.objects.none()
         user = self.request.user
@@ -607,11 +646,8 @@ class ExpedienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         if user.rol in ('SUPERVISOR', 'ASESOR', 'REVISOR'):
             return qs.all()
         if user.rol == 'CLIENTE':
-            # ContactoCliente.usuario → UsuarioCliente (NOT UsuarioInterno).
-            # La cadena correcta para llegar al email del contacto del cliente es:
-            # cliente__contactos__email (email directo del ContactoCliente), o bien
-            # verificar si existe un UsuarioCliente cuyo contacto pertenece al cliente.
-            # Aquí comparamos contra el email del ContactoCliente directamente.
+
+
             return qs.filter(
                 cliente__contactos__email__iexact=user.email
             ).distinct()
@@ -749,11 +785,8 @@ class ExpedienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='bitacora_nota')
     def bitacora_nota(self, request, pk=None):
-        """
-        FIX Bug 6: permite registrar notas manuales en la bitácora desde la app.
-        Antes solo se podían ver entradas automáticas — no había forma de agregar
-        anotaciones libres sin crear hallazgos o cambiar estado del expediente.
-        """
+
+
         expediente  = self.get_object()
         descripcion = request.data.get('descripcion', '').strip()
         if not descripcion:
@@ -788,8 +821,7 @@ class ExpedienteViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
             'documentos':                list(documentos),
         })
 
-    # (ej: COMPLETADO → BORRADOR, CANCELADO → EN_EJECUCION).
-    # COMPLETADO y CANCELADO son estados terminales: no permiten salida.
+
     _TRANSICIONES_VALIDAS = {
         'BORRADOR':     ['ACTIVO', 'CANCELADO'],
         'ACTIVO':       ['EN_EJECUCION', 'SUSPENDIDO', 'CANCELADO'],
@@ -861,12 +893,12 @@ class EvidenciaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     queryset = Evidencia.objects.select_related('expediente', 'hallazgo', 'subido_por').all()
 
     def _soft_delete(self, instance):
-        # Evidencias: son trazabilidad auditada, no se eliminan físicamente.
-        # Marcamos con prefijo [INACTIVA] para filtrado lógico y ponemos nombre idempotente.
+
+
         if not instance.nombre.startswith('[INACTIVA]'):
             instance.nombre = '[INACTIVA] ' + instance.nombre
             instance.save(update_fields=['nombre'])
-        # También limpiar descripción para señalizar el estado
+
         if not instance.descripcion.startswith('[INACTIVA]'):
             instance.descripcion = '[INACTIVA] ' + instance.descripcion
             instance.save(update_fields=['nombre', 'descripcion'])
@@ -895,9 +927,8 @@ class EvidenciaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
 class ChecklistEjecucionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     def _soft_delete(self, instance):
-        # 'OMITIDO' no es un valor válido en ESTADO_CHOICES de ChecklistEjecucion.
-        # Los valores válidos son: PENDIENTE, CUMPLE, NO_CUMPLE, NO_APLICA.
-        # Usar NO_APLICA como equivalente semántico de "no se aplica / fue omitido".
+
+
         instance.estado = 'NO_APLICA'
         instance.save(update_fields=['estado'])
 
@@ -913,29 +944,28 @@ class ChecklistEjecucionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
             'item', 'verificado_por', 'expediente'
         )
 
-        # Requerir filtro por expediente para evitar devolver todos los ítems
-        # de todos los expedientes a cualquier usuario autenticado.
+
         expediente_id = self.request.query_params.get('expediente')
         if expediente_id:
             qs = qs.filter(expediente_id=expediente_id)
         elif self.action == 'list':
-            # Sin filtro de expediente en list → devolver vacío en lugar de todo
+
             return ChecklistEjecucion.objects.none()
 
-        # Filtrar por permisos del usuario (igual que ExpedienteViewSet)
+
         user = self.request.user
         rol  = getattr(user, 'rol', None)
         if rol == 'SUPERVISOR':
             return qs
-        # AUDITOR: solo ítems de expedientes donde participa
+
         return qs.filter(
             Q(expediente__auditor_lider=user) |
             Q(expediente__equipo__usuario=user)
         ).distinct()
 
     def perform_update(self, serializer):
-        # Sin esto, verificado_por y fecha_verificacion permanecían NULL siempre,
-        # haciendo imposible rastrear quién completó cada ítem del checklist.
+
+
         from django.utils import timezone
         estado_nuevo = serializer.validated_data.get('estado', serializer.instance.estado)
         if estado_nuevo != 'PENDIENTE':
@@ -944,13 +974,13 @@ class ChecklistEjecucionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
                 fecha_verificacion=timezone.now(),
             )
         else:
-            # Si se revierte a PENDIENTE, limpiar la verificación
+
             serializer.save(
                 verificado_por=None,
                 fecha_verificacion=None,
             )
-        # Sin esto, verificado_por y fecha_verificacion permanecían NULL siempre,
-        # haciendo imposible rastrear quién completó cada ítem del checklist.
+
+
         from django.utils import timezone
         estado_nuevo = serializer.validated_data.get('estado', serializer.instance.estado)
         if estado_nuevo != 'PENDIENTE':
@@ -959,7 +989,7 @@ class ChecklistEjecucionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
                 fecha_verificacion=timezone.now(),
             )
         else:
-            # Si se revierte a PENDIENTE, limpiar la verificación
+
             serializer.save(
                 verificado_por=None,
                 fecha_verificacion=None,
@@ -1022,8 +1052,8 @@ class CertificacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
     filterset_fields = ['estado', 'cliente', 'tipo_auditoria', 'tipo_emision']
 
     def get_permissions(self):
-        # certificaciones — operación crítica que debe restringirse a ADMIN/AUDITOR_LIDER.
-        # Lectura (list/retrieve/verificar) sigue siendo pública o autenticada.
+
+
         if self.action in ('list', 'retrieve', 'verificar'):
             return [IsAuthenticated()]
         return [IsAdminOrLider()]
@@ -1087,10 +1117,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         instance.estado = 'CERRADA'
         instance.save(update_fields=['estado'])
 
-    # IsAuthenticated aceptaba cualquier sesión de Django (incluidas sin rol),
-    # lo que dejaba pasar usuarios que no deberían acceder al chatbot.
-    # CanUseChatbot verifica que el usuario tenga un rol interno válido y,
-    # a nivel de objeto, que la conversación le pertenezca (excepto ADMIN).
+
     permission_classes = [CanUseChatbot]
 
     def get_queryset(self):
@@ -1100,13 +1127,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         user = self.request.user
         rol  = getattr(user, 'rol', None)
 
-        # Esto hacía que:
-        #   - AUDITOR y AUDITOR_LIDER no veían conversaciones si la conv fue creada
-        #     en una sesión diferente del mismo usuario (edge case UUID correcto,
-        #     pero confuso con reload).
-        #   - ADMIN no podía ver las conversaciones de otros usuarios para soporte.
-        #   - EJECUTIVO no podía listar sus conversaciones si usuario_interno era None
-        #     (conversaciones vinculadas solo por cliente_id).
+
         if rol == 'SUPERVISOR':
             qs = Conversacion.objects.all()
         else:
@@ -1118,8 +1139,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         if expediente_id:
             qs = qs.filter(expediente_id=expediente_id)
 
-        # de DRF (AssertionError en .count() sobre QS sliceado).
-        # Se convierte a lista SOLO después del slice para que DRF no pagine.
+
         limit = self.request.query_params.get('limit')
         if limit:
             try:
@@ -1130,9 +1150,8 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        # Si la petición llega desde Android (User-Agent contiene 'okhttp' o
-        # 'Dart') debería ser 'MOVIL'. Usamos el header X-Canal si viene,
-        # o deducimos del User-Agent como fallback.
+
+
         canal = self.request.data.get('canal', '').upper()
         if canal not in ('WEB', 'MOVIL', 'INTERNO'):
             ua = self.request.META.get('HTTP_USER_AGENT', '').lower()
@@ -1145,9 +1164,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         conversacion = self.get_object()
         contenido    = request.data.get('contenido', '').strip()
 
-        # trace_id: correlaciona este mensaje de punta a punta en todos los logs
-        # (API → CELERY → TASK → OLLAMA → WS_OUT). Busca este ID en el archivo
-        # /app/logs/chatbot_ids.log para seguir el flujo completo de un mensaje.
+
         trace = _new_trace_id()
 
         _ids_log(_IDS_API,
@@ -1166,9 +1183,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
                      level='warning', msg='enviar_mensaje_rejected', reason='content_too_long')
             return Response({'error': 'El mensaje excede el límite de 4000 caracteres.'}, status=400)
 
-        # Guardar el mensaje del usuario ANTES de encolar, para no perderlo si
-        # el broker tarda. Si el encolado falla definitivamente, lo borramos para
-        # que el cliente pueda reintentar sin duplicados.
+
         msg_usuario = MensajeConversacion.objects.create(
             conversacion=conversacion,
             rol='USUARIO',
@@ -1177,11 +1192,7 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         _ids_log(_IDS_API, conv_id=str(conversacion.id), trace_id=trace,
                  msg='mensaje_guardado', msg_id=str(msg_usuario.id))
 
-        # ── Log estado del broker ANTES de .apply_async() ─────────────────
-        # Permite ver si la URL ya está mala antes de intentar la conexión.
-        # Si env_RABBITMQ_URL es '<NOT_SET>' o celery_app_broker_url es '' o None,
-        # el fix de settings/base.py (os.environ.get en lugar de decouple) es el
-        # que resuelve el problema. Este log lo confirma sin necesidad de fallo.
+
         from config.celery import app as _celery_app
         _ids_log(_IDS_CELERY,
                  conv_id=str(conversacion.id),
@@ -1194,12 +1205,11 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
         from workers.chatbot import procesar_mensaje_chatbot
         try:
-            # apply_async en lugar de .delay() para poder pasar headers con trace_id.
-            # CELERY_TASK_PUBLISH_RETRY_POLICY en settings reintenta hasta 3 veces
-            # con backoff antes de propagar la excepción al except de abajo.
+
+
             task = procesar_mensaje_chatbot.apply_async(
                 args=[str(conversacion.id), contenido, str(msg_usuario.id)],
-                headers={'trace_id': trace},  # el worker lo extrae con self.request.headers
+                headers={'trace_id': trace},
             )
             _ids_log(_IDS_CELERY, conv_id=str(conversacion.id), trace_id=trace,
                      msg='task_published_ok',
@@ -1207,20 +1217,16 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
                      msg_id=str(msg_usuario.id),
                      queue='default')
         except _BROKER_ERRORS as exc:
-            # El broker no está disponible incluso tras los reintentos automáticos.
-            # Eliminamos el mensaje guardado para evitar un mensaje huérfano sin
-            # respuesta del asistente (el cliente reintentará al recibir 503).
+
+
             msg_usuario.delete()
             _ids_log(_IDS_ERROR, conv_id=str(conversacion.id), trace_id=trace,
                      level='error',
                      msg='broker_unavailable',
                      exc_type=type(exc).__name__,
                      detail=str(exc))
-            # ── DIAGNÓSTICO COMPLETO DEL BROKER ───────────────────────────
-            # Captura y compara: URL en os.environ, en django.conf.settings,
-            # en app.conf de Celery, y hace un test real de conexión kombu.
-            # Ver resultado en: grep 'broker_diagnostic_snapshot' /app/logs/chatbot_ids.log
-            # El campo 'broker_url_mismatch_detected' confirma el bug de decouple.
+
+
             _broker_diag(conv_id=str(conversacion.id), trace_id=trace)
             logger.error(
                 '[IDS][BROKER] Broker no disponible conv=%s trace=%s exc=%s: %s',
@@ -1239,20 +1245,16 @@ class ConversacionViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
         return Response(MensajeSerializer(msgs, many=True).data)
 
     def destroy(self, request, *args, **kwargs):
-        # no consideraba al ADMIN, que debe poder borrar cualquier conversación,
-        # ni usaba el sistema de permisos estándar de DRF.
-        # get_object() ya llama check_object_permissions() con CanUseChatbot,
-        # así que si llegamos aquí el usuario tiene permiso.
+
+
         conversacion = self.get_object()
         conversacion.delete()
         return Response(status=204)
 
 
 class ChatbotStatusView(APIView):
-    """
-    GET /api/chatbot/status/
-    Verifica si Ollama está disponible y si el modelo está descargado.
-    """
+
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -1283,7 +1285,7 @@ class ChatbotStatusView(APIView):
             'ollama_activo':     disponible,
             'modelo_descargado': modelo_listo,
             'modelo':            modelo,
-            # No exponer la URL interna del servidor Ollama al frontend
+
             'mensaje': (
                 'Listo' if (disponible and modelo_listo) else
                 ('Descargando modelo...' if disponible else 'Ollama no disponible')
@@ -1292,10 +1294,8 @@ class ChatbotStatusView(APIView):
 
 
 class VisitaAgendadaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
-    """
-    CRUD de visitas agendadas.
-    Punto 5: calendario de visitas conectado con el cronograma de fases.
-    """
+
+
     from adapters.api.serializers import VisitaAgendadaSerializer
     from apps.expedientes.models import VisitaAgendada
 
@@ -1308,7 +1308,7 @@ class VisitaAgendadaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs  = super().get_queryset()
-        # Filtro por rango de fechas para el calendario
+
         desde = self.request.query_params.get('desde')
         hasta = self.request.query_params.get('hasta')
         if desde:
@@ -1326,18 +1326,18 @@ class VisitaAgendadaViewSet(SoftDeleteMixin, viewsets.ModelViewSet):
 
 
 class DashboardGlobalView(APIView):
-    # al dashboard con todos los KPIs globales.
+
     permission_classes = [IsInternalUser]
 
     def get(self, request):
         user = request.user
         rol  = getattr(user, 'rol', None)
 
-        # Expedientes visibles según rol
+
         if rol in ('SUPERVISOR', 'ASESOR', 'REVISOR'):
             exp_qs = Expediente.objects.all()
         else:
-            # AUDITOR y AUXILIAR: solo sus expedientes asignados
+
             exp_qs = Expediente.objects.filter(
                 Q(auditor_lider=user) | Q(equipo__usuario=user)
             ).distinct()
@@ -1355,12 +1355,11 @@ class DashboardGlobalView(APIView):
             ),
         }
 
-        # no tiene acceso a la gestión de clientes — información innecesaria
-        # y que podría usarse para inferir el volumen comercial de la empresa.
+
         if rol in ('SUPERVISOR', 'ASESOR', 'REVISOR'):
             data['clientes_activos'] = Cliente.objects.filter(estado='ACTIVO').count()
         else:
-            data['clientes_activos'] = None  # AUDITOR no ve esta métrica
+            data['clientes_activos'] = None
 
         return Response(data)
 
@@ -1402,8 +1401,8 @@ class ExportarReporteView(APIView):
                 {'error': f'Tipo inválido. Opciones: {valid_tipos}'},
                 status=400,
             )
-        # cuando el Excel esté listo. Antes el frontend recibía un task_id sin
-        # ningún mecanismo para saber cuándo el archivo estaba disponible.
+
+
         filtros['_user_id'] = str(request.user.id)
         from workers.reportes import generar_reporte_excel
         try:
@@ -1423,12 +1422,9 @@ class ExportarReporteView(APIView):
 DocumentoViewSet = DocumentoExpedienteViewSet
 
 
-# ── Seed de datos demo ────────────────────────────────────────────────────────
 class SeedDemoView(APIView):
-    """
-    POST /api/administracion/seed/
-    Carga tipos de auditoría de demostración. Solo ADMIN.
-    """
+
+
     permission_classes = [IsAdmin]
 
     def post(self, request):
@@ -1501,29 +1497,12 @@ class SeedDemoView(APIView):
         }, status=201 if creados > 0 else 200)
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ANÁLISIS DE DOCUMENTOS VIA CHATBOT — AC-DOC-ANALYSIS
-# POST /api/chatbot/analizar-documento/
-# Acepta un archivo multipart, lo guarda temporalmente, lanza la tarea Celery
-# y retorna inmediatamente. El resultado llega al frontend via WebSocket.
-# ══════════════════════════════════════════════════════════════════════════════
-
 class AnalizarDocumentoChatbotView(APIView):
-    """
-    Endpoint para análisis inteligente de documentos via el chatbot.
 
-    - Cualquier usuario autenticado puede usarlo.
-    - Verifica tipo y tamaño ANTES de encolar (fail-fast).
-    - Guarda el archivo en MEDIA_ROOT/analisis_temp/<conv_id>/<nombre>
-      para que el worker pueda leerlo. El worker NO lo borra (la tarea
-      periódica de limpieza lo hace pasadas 24h).
-    - Retorna 202 Accepted inmediatamente; el análisis llega por WS.
-    """
+
     permission_classes = [IsAuthenticated, CanUseChatbot]
 
-    # sin esto request.FILES siempre está vacío y el endpoint devuelve
-    # "Se requiere un archivo adjunto." aunque el cliente lo envíe.
-    # DRF solo inyecta estos parsers automáticamente en ModelViewSet/GenericAPIView.
+
     from rest_framework.parsers import MultiPartParser, FormParser
     parser_classes = [MultiPartParser, FormParser]
 
@@ -1532,14 +1511,14 @@ class AnalizarDocumentoChatbotView(APIView):
         '.vbs', '.jar', '.py', '.rb', '.php', '.pl', '.scr',
         '.pif', '.reg', '.lnk', '.hta', '.wsf', '.inf', '.iso',
     }
-    _MAX_BYTES = 50 * 1024 * 1024  # 50 MB
+    _MAX_BYTES = 50 * 1024 * 1024
 
     def post(self, request):
         import os, uuid
         from django.conf import settings
         from apps.chatbot.models import Conversacion, MensajeConversacion
 
-        # ── Validar parámetros ─────────────────────────────────────────────
+
         conversacion_id = request.data.get('conversacion_id', '').strip()
         if not conversacion_id:
             return Response({'error': 'conversacion_id requerido.'}, status=400)
@@ -1550,7 +1529,7 @@ class AnalizarDocumentoChatbotView(APIView):
 
         pregunta = request.data.get('pregunta', '').strip()
 
-        # ── Fail-fast: extensión bloqueada ─────────────────────────────────
+
         nombre   = archivo.name
         ext      = os.path.splitext(nombre.lower())[1]
         if ext in self._EXTENSIONES_PELIGROSAS:
@@ -1560,7 +1539,7 @@ class AnalizarDocumentoChatbotView(APIView):
                 status=400,
             )
 
-        # ── Fail-fast: tamaño ──────────────────────────────────────────────
+
         if archivo.size > self._MAX_BYTES:
             return Response(
                 {'error': f'Archivo demasiado grande ({archivo.size // (1024*1024)} MB). '
@@ -1568,7 +1547,7 @@ class AnalizarDocumentoChatbotView(APIView):
                 status=400,
             )
 
-        # ── Verificar que la conversación existe y pertenece al usuario ────
+
         try:
             conv = Conversacion.objects.select_related('usuario_interno').get(
                 id=conversacion_id
@@ -1576,18 +1555,20 @@ class AnalizarDocumentoChatbotView(APIView):
         except (Conversacion.DoesNotExist, Exception):
             return Response({'error': 'Conversación no encontrada.'}, status=404)
 
-        # Solo el propietario de la conv o un ADMIN puede enviar docs
+
         usuario = request.user
         es_admin = getattr(usuario, 'rol', '') == 'SUPERVISOR'
         if not es_admin and str(getattr(conv, 'usuario_interno_id', '')) != str(usuario.id):
             return Response({'error': 'No tienes acceso a esta conversación.'}, status=403)
 
-        # ── Guardar archivo en disco ───────────────────────────────────────
+
         media_root  = getattr(settings, 'MEDIA_ROOT', '/app/media')
-        carpeta     = os.path.join(media_root, 'analisis_temp', str(conversacion_id))
+        conv_id_seguro = os.path.basename(str(conversacion_id))
+        carpeta     = os.path.join(media_root, 'analisis_temp', conv_id_seguro)
         os.makedirs(carpeta, exist_ok=True)
 
-        nombre_seguro = f'{uuid.uuid4().hex}_{nombre}'
+        nombre_base   = os.path.basename(nombre)
+        nombre_seguro = f'{uuid.uuid4().hex}_{nombre_base}'
         ruta_archivo  = os.path.join(carpeta, nombre_seguro)
 
         try:
@@ -1597,11 +1578,9 @@ class AnalizarDocumentoChatbotView(APIView):
         except Exception as e:
             return Response({'error': f'Error guardando archivo: {e}'}, status=500)
 
-        # ── Persistir mensaje del usuario con referencia al documento ──────
-        contenido_usuario = (
-            f'📎 **Documento adjunto:** `{nombre}`\n'
-            + (f'\n{pregunta}' if pregunta else '\n*Analiza este documento.*')
-        )
+
+        cuerpo_pregunta = f'\n{pregunta}' if pregunta else '\n*Analiza este documento.*'
+        contenido_usuario = f'📎 **Documento adjunto:** `{nombre}`\n' + cuerpo_pregunta
         msg_usuario = MensajeConversacion.objects.create(
             conversacion=conv,
             rol='USUARIO',
@@ -1609,7 +1588,7 @@ class AnalizarDocumentoChatbotView(APIView):
             tokens_usados=0,
         )
 
-        # ── Encolar tarea de análisis ──────────────────────────────────────
+
         mime_type = archivo.content_type or 'application/octet-stream'
         trace_id  = _new_trace_id()
         _op_id    = new_op_id()
@@ -1653,7 +1632,7 @@ class AnalizarDocumentoChatbotView(APIView):
                 conv_id=str(conversacion_id),
             )
         except _BROKER_ERRORS as e:
-            # Broker caído — informar sin crashear
+
             os.remove(ruta_archivo)
             msg_usuario.delete()
             _ids_log(_IDS_ERROR,
@@ -1672,8 +1651,6 @@ class MisPermisosView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from adapters.api.serializers import UsuarioInternoSerializer
-        data = UsuarioInternoSerializer(request.user).data
         return Response({
             'rol':               request.user.rol,
             'tipo_contratacion': getattr(request.user, 'tipo_contratacion', ''),

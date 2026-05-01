@@ -1,10 +1,11 @@
-"""
-tests/test_modelos.py
-AC-69: Tests unitarios de modelos Django
-"""
+import os
 import pytest
 from django.test import TestCase
 from django.utils import timezone
+
+
+_TEST_PWD       = os.environ.get('TEST_USER_SECRET',  'Test1234!')
+_TEST_PWD_ADMIN = os.environ.get('TEST_ADMIN_SECRET', 'Admin1234!')
 
 
 @pytest.mark.django_db
@@ -13,14 +14,14 @@ class TestUsuarioInterno(TestCase):
         from apps.administracion.models import UsuarioInterno
         u = UsuarioInterno.objects.create_user(
             email='test@auditcore.com',
-            password='Test1234!',
+            password=_TEST_PWD,
             nombre='Juan',
             apellido='Pérez',
             rol='AUDITOR',
         )
         assert u.email == 'test@auditcore.com'
         assert u.nombre_completo == 'Juan Pérez'
-        assert u.check_password('Test1234!')
+        assert u.check_password(_TEST_PWD)
         assert u.estado == 'ACTIVO'
         assert u.intentos_fallidos == 0
 
@@ -28,7 +29,7 @@ class TestUsuarioInterno(TestCase):
         from apps.administracion.models import UsuarioInterno
         from apps.administracion.mfa import registrar_intento_fallido, verificar_bloqueo
         u = UsuarioInterno.objects.create_user(
-            email='bloqueo@auditcore.com', password='Test1234!',
+            email='bloqueo@auditcore.com', password=_TEST_PWD,
             nombre='Test', apellido='Bloqueo',
         )
         for _ in range(5):
@@ -44,7 +45,7 @@ class TestCliente(TestCase):
         from apps.administracion.models import UsuarioInterno
         from apps.clientes.models import Cliente
         admin = UsuarioInterno.objects.create_user(
-            email='admin@test.com', password='Admin1234!',
+            email='admin@test.com', password=_TEST_PWD_ADMIN,
             nombre='Admin', apellido='Test', rol='ADMIN',
         )
         c = Cliente.objects.create(
@@ -61,7 +62,7 @@ class TestCliente(TestCase):
         from apps.clientes.models import Cliente
         from django.db import IntegrityError
         admin = UsuarioInterno.objects.create_user(
-            email='admin2@test.com', password='Admin1234!',
+            email='admin2@test.com', password=_TEST_PWD_ADMIN,
             nombre='Admin', apellido='Test', rol='ADMIN',
         )
         Cliente.objects.create(razon_social='Empresa A', nit='111', creado_por=admin)
@@ -78,7 +79,7 @@ class TestExpediente(TestCase):
         from apps.clientes.models import Cliente
         from apps.tipos_auditoria.models import TipoAuditoria
         admin = UsuarioInterno.objects.create_user(
-            email='lider@test.com', password='Test1234!',
+            email='lider@test.com', password=_TEST_PWD,
             nombre='Lider', apellido='Test', rol='AUDITOR_LIDER',
         )
         cliente = Cliente.objects.create(

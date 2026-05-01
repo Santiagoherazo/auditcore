@@ -1,9 +1,3 @@
-// ═══════════════════════════════════════════════════
-//  MODELOS DE DATOS — AuditCore
-//  Representan la respuesta JSON de la API
-// ═══════════════════════════════════════════════════
-
-// ── Usuario ───────────────────────────────────────
 class UsuarioModel {
   final String id;
   final String email;
@@ -37,7 +31,7 @@ class UsuarioModel {
       );
 }
 
-// ── Cliente ───────────────────────────────────────
+
 class ClienteModel {
   final String id;
   final String razonSocial;
@@ -116,7 +110,7 @@ class ContactoModel {
       );
 }
 
-// ── Expediente ────────────────────────────────────
+
 class ExpedienteModel {
   final String id;
   final String numeroExpediente;
@@ -147,7 +141,7 @@ class ExpedienteModel {
   });
 
   factory ExpedienteModel.fromJson(Map<String, dynamic> j) {
-    // FIX: porcentaje_avance puede llegar como String (Decimal de Django) o num
+
     double parseAvance(dynamic v) {
       if (v == null) return 0.0;
       if (v is num) return v.toDouble();
@@ -200,7 +194,7 @@ class FaseModel {
       );
 }
 
-// ── Hallazgo ──────────────────────────────────────
+
 class HallazgoModel {
   final String id;
   final String expediente;
@@ -250,7 +244,7 @@ class HallazgoModel {
       };
 }
 
-// ── Certificación ─────────────────────────────────
+
 class CertificacionModel {
   final String id;
   final String numero;
@@ -260,7 +254,7 @@ class CertificacionModel {
   final String fechaEmision;
   final String fechaVencimiento;
   final String estado;
-  final int? diasParaVencer;  // null cuando fecha_vencimiento es nula en el backend
+  final int? diasParaVencer;
   final String? certificadoPdf;
 
   const CertificacionModel({
@@ -290,7 +284,7 @@ class CertificacionModel {
       );
 }
 
-// ── Mensaje del Chatbot ───────────────────────────
+
 class MensajeModel {
   final String id;
   final String rol;
@@ -315,7 +309,7 @@ class MensajeModel {
       );
 }
 
-// ── Bitácora ──────────────────────────────────────
+
 class BitacoraModel {
   final String id;
   final String tipoUsuario;
@@ -346,11 +340,11 @@ class BitacoraModel {
       );
 }
 
-// ── Dashboard ─────────────────────────────────────
+
 class DashboardModel {
   final int clientesActivos;
   final int expedientesActivos;
-  // FIX: campos faltantes que el backend y WS envían pero el modelo ignoraba
+
   final int expedientesBorrador;
   final int expedientesCompletados;
   final int certificacionesVigentes;
@@ -370,8 +364,8 @@ class DashboardModel {
   });
 
   factory DashboardModel.fromJson(Map<String, dynamic> j) => DashboardModel(
-        // FIX: clientes_activos puede ser null para rol AUDITOR (el backend no
-        // lo envía para ese rol). Usar ?? 0 para no romper la UI.
+
+
         clientesActivos:           j['clientes_activos'] as int? ?? 0,
         expedientesActivos:        j['expedientes_activos'] ?? 0,
         expedientesBorrador:       j['expedientes_borrador'] ?? 0,
@@ -384,13 +378,13 @@ class DashboardModel {
       );
 }
 
-// ── Checklist de ejecución ────────────────────────
+
 class ChecklistEjecucionModel {
   final String id;
   final String expedienteId;
-  // FIX: el campo del serializer es 'item' (UUID), no 'checklist_item'
+
   final String itemId;
-  // FIX: el campo del serializer es 'item_descripcion', no 'descripcion'
+
   final String descripcion;
   final String estado;
   final String? observacion;

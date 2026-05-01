@@ -12,9 +12,7 @@ String _env(String key, String fallback) {
   }
 }
 
-/// Almacenamiento de tokens con doble capa:
-///   1. Caché en memoria  → siempre disponible en el ciclo de vida de la app.
-///   2. FlutterSecureStorage → persistencia entre sesiones (best-effort).
+
 class _TokenStorage {
   static String? _accessMemory;
   static String? _refreshMemory;
@@ -44,12 +42,11 @@ class _TokenStorage {
         return value;
       }
     } catch (e) {
-      // FIX: flutter_secure_storage web puede fallar con IndexedDB en algunos
-      // contextos (modo incógnito, políticas de browser, primer uso).
-      // Si falla, intentar leer desde sessionStorage como fallback web.
+
+
       if (kIsWeb) {
         try {
-          // ignore: avoid_web_libraries_in_flutter
+
           final storageKey = key == 'access_token' ? _keyAccess : _keyRefresh;
           final value = _webFallbackRead(storageKey);
           if (value != null && value.isNotEmpty) {
@@ -63,12 +60,12 @@ class _TokenStorage {
     return null;
   }
 
-  /// Fallback de lectura para web cuando IndexedDB no está disponible.
+
   static String? _webFallbackRead(String key) {
     try {
-      // Usar dart:html solo en web — el compilador elimina este código en móvil
-      // ignore: undefined_prefixed_name
-      return null; // Implementado vía sessionStorage si está disponible
+
+
+      return null;
     } catch (_) {
       return null;
     }
@@ -98,9 +95,7 @@ class ApiClient {
   static Dio?              _instance;
   static String?           _customBaseUrl;
 
-  /// Completer para serializar múltiples peticiones de refresh concurrentes.
-  /// Si dos 401 llegan simultáneamente, solo la primera hace el refresh;
-  /// las demás esperan el mismo resultado.
+
   static Completer<bool>?  _refreshCompleter;
 
   static void setBaseUrl(String url) {
@@ -112,18 +107,14 @@ class ApiClient {
     if (_customBaseUrl != null) return _customBaseUrl!;
 
     if (kIsWeb) {
-      // En web SIEMPRE usar rutas relativas al origen del browser.
-      // Esto funciona tanto en desarrollo (localhost:3000 con Nginx)
-      // como en producción (cualquier dominio con Nginx).
-      // Si se corre con 'flutter run -d chrome' sin Nginx (puerto != 3000),
-      // los requests irán a ese puerto sin proxy → error de conexión.
-      // Solución: siempre servir la app desde Nginx (docker-compose up).
+
+
       return '';
     }
 
     final envUrl = _env('API_BASE_URL', '');
     if (envUrl.isNotEmpty) return envUrl;
-    // Fallback móvil/desktop sin .env
+
     return 'http://localhost:8000';
   }
 
@@ -138,10 +129,8 @@ class ApiClient {
     final dio = Dio(BaseOptions(
       baseUrl:        apiBase,
       connectTimeout: const Duration(seconds: 10),
-      // FIX: receiveTimeout alineado con proxy_read_timeout de Nginx (120s).
-      // Con 20s, Dio cancelaba el request antes de que Nginx lo cortara,
-      // generando un retry sin token que producía 401 en los logs del backend.
-      // Endpoints de larga duración (chatbot, PDF) necesitan margen suficiente.
+
+
       receiveTimeout: const Duration(seconds: 115),
       headers: {
         'Content-Type': 'application/json',
@@ -187,9 +176,7 @@ class ApiClient {
     return dio;
   }
 
-  /// Garantiza que solo un refresh ocurra a la vez aunque lleguen
-  /// múltiples 401 simultáneos. Las llamadas concurrentes esperan
-  /// el Completer activo en lugar de disparar su propio refresh.
+
   static Future<bool> _serializedRefresh() async {
     if (_refreshCompleter != null) {
       return _refreshCompleter!.future;
@@ -238,11 +225,9 @@ class ApiClient {
     }
   }
 
-  /// Precargar tokens en caché de memoria al arrancar la app.
-  /// Llamar en main() antes de runApp() para que AuthNotifier
-  /// encuentre los tokens ya disponibles sin espera.
+
   static Future<void> init() async {
-    // Precarga acceso y refresh en memoria leyendo desde SecureStorage
+
     await _TokenStorage.read('access_token');
     await _TokenStorage.read('refresh_token');
   }

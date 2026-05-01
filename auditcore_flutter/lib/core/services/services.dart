@@ -3,7 +3,7 @@ import '../api/api_client.dart';
 import '../api/endpoints.dart';
 import '../models/models.dart';
 
-// ── Auth ──────────────────────────────────────────
+
 class AuthService {
   Dio get _dio => ApiClient.instance;
 
@@ -17,9 +17,7 @@ class AuthService {
     }
     final resp = await _dio.post(Endpoints.login, data: body);
 
-    // FIX: manejar respuesta MFA antes de intentar parsear tokens
-    // El backend devuelve {'detail': '...', 'mfa_required': true} con HTTP 200
-    // cuando el usuario tiene MFA activo. Sin este check, falla al parsear.
+
     final data = resp.data as Map<String, dynamic>? ?? {};
     if (data['mfa_required'] == true) {
       throw Exception('MFA_REQUIRED:${data['detail'] ?? 'Se requiere código MFA.'}');
@@ -50,7 +48,7 @@ class AuthService {
   }
 }
 
-// ── Clientes ──────────────────────────────────────
+
 class ClientesService {
   Dio get _dio => ApiClient.instance;
 
@@ -84,9 +82,7 @@ class ClientesService {
     return ClienteModel.fromJson(resp.data as Map<String, dynamic>);
   }
 
-  /// Cambia el estado del cliente a través del endpoint controlado /cambiar-estado/.
-  /// El campo 'estado' es read_only en el serializer estándar para evitar
-  /// que ediciones normales reseten el estado accidentalmente.
+
   Future<Map<String, dynamic>> cambiarEstado(
       String id, String nuevoEstado, {String motivo = ''}) async {
     final resp = await _dio.post(
@@ -102,7 +98,7 @@ class ClientesService {
   }
 }
 
-// ── Expedientes ───────────────────────────────────
+
 class ExpedientesService {
   Dio get _dio => ApiClient.instance;
 
@@ -128,7 +124,7 @@ class ExpedientesService {
 
   Future<List<BitacoraModel>> bitacora(String id) async {
     final resp = await _dio.get(Endpoints.expedienteBitacora(id));
-    // FIX: la bitácora no está paginada — devuelve lista directa
+
     final lista = resp.data as List? ?? [];
     return lista.map((j) => BitacoraModel.fromJson(j as Map<String, dynamic>)).toList();
   }
@@ -148,7 +144,7 @@ class ExpedientesService {
   }
 }
 
-// ── Hallazgos ─────────────────────────────────────
+
 class HallazgosService {
   Dio get _dio => ApiClient.instance;
 
@@ -207,7 +203,7 @@ class HallazgosService {
   }
 }
 
-// ── Certificaciones ───────────────────────────────
+
 class CertificacionesService {
   Dio get _dio => ApiClient.instance;
 
@@ -221,7 +217,7 @@ class CertificacionesService {
   }
 
   Future<Map<String, dynamic>> verificar(String codigo) async {
-    // FIX: el endpoint es una acción del ViewSet, no una URL separada
+
     final resp = await _dio.get(
       Endpoints.certificacionVerificar,
       queryParameters: {'codigo': codigo.trim()},
@@ -234,7 +230,7 @@ class CertificacionesService {
   }
 }
 
-// ── Chatbot ───────────────────────────────────────
+
 class ChatbotService {
   Dio get _dio => ApiClient.instance;
 
@@ -245,8 +241,7 @@ class ChatbotService {
     return (resp.data['id'] ?? '').toString();
   }
 
-  /// FIX: busca la conversación activa más reciente para no crear una nueva
-  /// cada vez que el usuario entra a la pantalla del chat.
+
   Future<String?> obtenerConversacionActiva({String? expedienteId}) async {
     try {
       final resp = await _dio.get(Endpoints.conversaciones, queryParameters: {
@@ -279,7 +274,7 @@ class ChatbotService {
   }
 }
 
-// ── Dashboard ─────────────────────────────────────
+
 class DashboardService {
   Dio get _dio => ApiClient.instance;
 
@@ -289,7 +284,7 @@ class DashboardService {
   }
 }
 
-// ── Documentos ────────────────────────────────────
+
 class DocumentosService {
   Dio get _dio => ApiClient.instance;
 
@@ -326,7 +321,7 @@ class DocumentosService {
     return resp.data as Map<String, dynamic>;
   }
 
-  /// Sube un documento a un expediente.
+
   Future<Map<String, dynamic>> subir({
     required String expedienteId,
     required String nombre,
@@ -360,7 +355,7 @@ class DocumentosService {
   }
 }
 
-// ── Checklist ─────────────────────────────────────
+
 class ChecklistService {
   Dio get _dio => ApiClient.instance;
 
@@ -388,7 +383,7 @@ class ChecklistService {
   }
 }
 
-// ── Formularios dinámicos ─────────────────────────
+
 class FormulariosService {
   Dio get _dio => ApiClient.instance;
 
@@ -403,9 +398,8 @@ class FormulariosService {
     final data = resp.data;
     final esquemas = data is Map ? (data['results'] as List? ?? []) : (data as List? ?? []);
     if (esquemas.isEmpty) return [];
-    // FIX: verificar que esquemas.first no sea nulo y que tenga el campo 'campos'.
-    // Si el tipo de auditoría no tiene esquema de formulario configurado,
-    // 'campos' puede ser null → castear directo lanzaba RangeError/TypeError.
+
+
     final primerEsquema = esquemas.first;
     if (primerEsquema == null) return [];
     final campos = (primerEsquema as Map<String, dynamic>)['campos'] as List? ?? [];
@@ -429,7 +423,7 @@ class FormulariosService {
   }
 }
 
-// ── Modelo CampoFormulario (solo en services, no en models globales) ──────
+
 class CampoFormularioModel {
   final String id;
   final String nombreCampo;
@@ -450,7 +444,7 @@ class CampoFormularioModel {
   });
 
   factory CampoFormularioModel.fromJson(Map<String, dynamic> j) {
-    // FIX: 'opciones' en el serializer es una List directa (no un Map anidado)
+
     final raw = j['opciones'];
     List<String> opts = [];
     if (raw is List) {

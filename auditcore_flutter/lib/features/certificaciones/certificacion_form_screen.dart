@@ -8,7 +8,7 @@ import '../../core/services/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
-// Provider de tipos de auditoría para certificaciones (top-level, no inline en build)
+
 final _tiposCertProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>>((ref) async {
   final resp = await ApiClient.instance.get(Endpoints.tiposAuditoria);
   final data = resp.data;
@@ -16,10 +16,7 @@ final _tiposCertProvider = FutureProvider.autoDispose<List<Map<String, dynamic>>
   return lista.cast<Map<String, dynamic>>();
 });
 
-/// FIX Bug 7: pantalla de creación de certificaciones.
-/// Antes no existía ninguna forma de emitir certificaciones desde la app —
-/// solo se podían visualizar. Ahora ADMIN y AUDITOR_LIDER pueden emitir
-/// certificaciones nuevas directamente.
+
 class CertificacionFormScreen extends ConsumerStatefulWidget {
   const CertificacionFormScreen({super.key});
   @override
@@ -76,7 +73,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
       });
       ref.invalidate(certificacionesProvider);
       if (mounted) {
-        // FIX: usar context.pop() en vez de context.go() para volver correctamente
+
         context.pop();
         ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Certificación emitida correctamente.')));
@@ -122,7 +119,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
                   padding: const EdgeInsets.all(16),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    // Cliente
+
                     _label('Cliente *'),
                     const SizedBox(height: 6),
                     clientesAsync.when(
@@ -148,7 +145,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Tipo auditoría
+
                     _label('Tipo de auditoría *'),
                     const SizedBox(height: 6),
                     tiposAsync.when(
@@ -174,7 +171,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Expediente (opcional)
+
                     _label('Expediente relacionado (opcional)'),
                     const SizedBox(height: 6),
                     expedientesAsync.when(
@@ -202,7 +199,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Tipo de emisión
+
                     _label('Tipo de emisión'),
                     const SizedBox(height: 6),
                     DropdownButtonFormField<String>(
@@ -218,7 +215,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Fecha vencimiento
+
                     _label('Fecha de vencimiento *'),
                     const SizedBox(height: 6),
                     InkWell(
@@ -261,7 +258,7 @@ class _CertificacionFormState extends ConsumerState<CertificacionFormScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Observaciones
+
                     _label('Observaciones'),
                     const SizedBox(height: 6),
                     TextFormField(

@@ -12,7 +12,7 @@ import 'router/app_router.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // FIX: URLs limpias sin el # (hash) — debe llamarse ANTES de runApp
+
   usePathUrlStrategy();
 
   await initializeDateFormatting('es', null);
@@ -22,8 +22,7 @@ Future<void> main() async {
     await dotenv.load(fileName: '.env');
   } catch (_) {}
 
-  // Cargar tokens persistidos ANTES de crear providers
-  // para que AuthNotifier encuentre la sesión al arrancar
+
   await ApiClient.init();
 
   runApp(const ProviderScope(child: AuditCoreApp()));

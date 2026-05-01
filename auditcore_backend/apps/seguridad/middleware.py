@@ -2,11 +2,7 @@ from apps.seguridad.models import AuditLogSistema
 
 RUTAS_SENSIBLES = ['/api/auth/', '/api/clientes/', '/api/expedientes/', '/api/certificaciones/']
 
-# FIX: solo auditar códigos que indican acciones reales o intentos de acceso denegado.
-# Antes se auditaba cualquier status >= 400, incluyendo 404 (recursos no encontrados)
-# y 405 (método no permitido), llenando la bitácora con falsos positivos de bots o
-# typos en URLs — inútil para auditoría real y costoso en escrituras a BD.
-# 404 y 405 se ignoran. 401/403 se registran como DENEGADO para detectar intentos.
+
 _IGNORAR_CODES = {404, 405}
 
 

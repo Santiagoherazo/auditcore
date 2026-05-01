@@ -32,9 +32,8 @@ class DocumentoExpediente(models.Model):
         ordering = ['expediente', 'nombre', '-version']
 
     def save(self, *args, **kwargs):
-        # FIX: solo auto-incrementar versión si es un documento NUEVO (no edición)
-        # La lógica anterior incrementaba la versión en cualquier save(), incluso
-        # al aprobar/rechazar el documento sin subir archivo nuevo.
+
+
         if not self.pk and self.documento_requerido:
             existente = DocumentoExpediente.objects.filter(
                 expediente=self.expediente,
@@ -43,7 +42,7 @@ class DocumentoExpediente(models.Model):
             if existente:
                 self.version = existente.version + 1
 
-        # Calcular hash solo si hay archivo nuevo sin hash
+
         if self.archivo and not self.hash_sha256:
             try:
                 self.archivo.seek(0)
@@ -53,6 +52,6 @@ class DocumentoExpediente(models.Model):
                 self.hash_sha256 = sha256.hexdigest()
                 self.archivo.seek(0)
             except Exception:
-                pass  # Si el archivo no es seekable, ignorar el hash
+                pass
 
         super().save(*args, **kwargs)

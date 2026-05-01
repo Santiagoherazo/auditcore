@@ -52,17 +52,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     super.dispose();
   }
 
-  // ── Paso 1: login con email + contraseña ──────────────────────────────────
-  //
-  // FIX CRÍTICO: antes se llamaba ref.read(authProvider.notifier).login()
-  // que internamente hace state=AsyncValue.loading() y luego state=AsyncValue.error()
-  // durante el flujo MFA. Esto dispara el redirect del GoRouter que observa
-  // authProvider, causando que la pantalla de MFA desaparezca o la app navegue
-  // a /login de vuelta antes de que el usuario pueda ingresar el código.
-  //
-  // SOLUCIÓN: llamar AuthService directamente para los pasos intermedios.
-  // authProvider.notifier.cargarUsuario() solo se invoca cuando el login
-  // está 100% completado (con o sin MFA), actualizando el estado una sola vez.
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() { _cargando = true; _error = null; });
@@ -72,7 +62,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         _emailCtrl.text.trim(),
         _passCtrl.text,
       );
-      // Login completo sin MFA — cargar usuario y navegar
+
       if (mounted) {
         await ref.read(authProvider.notifier).cargarUsuario();
         context.go('/dashboard');
@@ -99,7 +89,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     }
   }
 
-  // ── Paso 2: verificar código TOTP ─────────────────────────────────────────
+
   Future<void> _verificarMfa() async {
     final codigo = _mfaCtrl.text.trim().replaceAll(' ', '');
     if (codigo.length != 6) {
@@ -114,7 +104,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
         _passCtrl.text,
         codigoMfa: codigo,
       );
-      // Login MFA completo — ahora sí actualizamos el AuthNotifier
+
       if (mounted) {
         await ref.read(authProvider.notifier).cargarUsuario();
         context.go('/dashboard');
@@ -182,7 +172,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo
+
                 Container(
                   width: 48, height: 48,
                   decoration: BoxDecoration(
@@ -204,7 +194,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
                         fontSize: 13, color: Color(0x66FFFFFF))),
                 const SizedBox(height: 32),
 
-                // Card
+
                 Container(
                   padding: const EdgeInsets.all(24),
                   decoration: BoxDecoration(
@@ -245,7 +235,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  // ── Paso 1 — email + contraseña ───────────────────────────────────────────
+
   Widget _buildLoginStep() {
     return Form(
       key: _formKey,
@@ -336,7 +326,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  // ── Paso 2 — código TOTP ──────────────────────────────────────────────────
+
   Widget _buildMfaStep() {
     return FadeTransition(
       opacity: _fadeAnim,

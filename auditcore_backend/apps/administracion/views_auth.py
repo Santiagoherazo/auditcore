@@ -1,10 +1,3 @@
-"""
-apps/administracion/views_auth.py
-AC-02: Login con JWT
-AC-03: MFA TOTP
-AC-04: Bloqueo automático tras 5 intentos
-AC-05: Recuperación de contraseña
-"""
 import logging
 import secrets
 from datetime import timedelta
@@ -26,11 +19,16 @@ try:
         log_logout, log_mfa_event,
     )
 except ImportError:
-    def alog(*a, **kw): pass
-    def log_login_ok(*a, **kw): pass
-    def log_login_failed(*a, **kw): pass
-    def log_logout(*a, **kw): pass
-    def log_mfa_event(*a, **kw): pass
+    def alog(*a, **kw):
+        pass
+    def log_login_ok(*a, **kw):
+        pass
+    def log_login_failed(*a, **kw):
+        pass
+    def log_logout(*a, **kw):
+        pass
+    def log_mfa_event(*a, **kw):
+        pass
 
 
 def _get_ip(request) -> str:
@@ -39,7 +37,7 @@ def _get_ip(request) -> str:
 
 
 class LoginView(APIView):
-    """AC-02 + AC-04: Login con control de bloqueo tras 5 intentos fallidos."""
+
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -59,17 +57,13 @@ class LoginView(APIView):
         try:
             usuario = UsuarioInterno.objects.get(email=email)
         except UsuarioInterno.DoesNotExist:
-            # No revelar si el email existe o no
+
             return Response({'detail': 'Credenciales inválidas.'}, status=401)
 
-        # Esto permitía que un usuario BLOQUEADO probara contraseñas y distinguiera
-        # "contraseña correcta pero bloqueado" (403) de "contraseña incorrecta" (401),
-        # filtrando información útil para un atacante.
-        # Orden correcto: bloqueo temporal → estado permanente → contraseña → MFA.
 
         _ip = _get_ip(request)
 
-        # 1. Bloqueo temporal por intentos fallidos (AC-04)
+
         if verificar_bloqueo(usuario):
             log_login_failed(email, ip=_ip, reason='account_locked')
             return Response(
@@ -78,12 +72,12 @@ class LoginView(APIView):
                 status=403,
             )
 
-        # 2. Estado de la cuenta (INACTIVO o BLOQUEADO permanente)
+
         if usuario.estado != 'ACTIVO':
             log_login_failed(email, ip=_ip, reason='account_inactive')
             return Response({'detail': 'Usuario inactivo. Contacta al administrador.'}, status=403)
 
-        # 3. Verificar contraseña
+
         if not usuario.check_password(password):
             registrar_intento_fallido(usuario)
             restantes = max(0, 5 - (usuario.intentos_fallidos or 0))
@@ -93,7 +87,7 @@ class LoginView(APIView):
                 status=401,
             )
 
-        # AC-03: MFA
+
         if usuario.mfa_habilitado:
             if not codigo_mfa:
                 return Response(
@@ -121,15 +115,14 @@ class LoginView(APIView):
 
 
 class MFASetupView(APIView):
-    """AC-03: Genera QR y activa/desactiva MFA para el usuario autenticado."""
+
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         from apps.administracion.mfa import generar_secret_totp, generar_qr_totp
         usuario = request.user
-        # Si MFA ya está habilitado, no devolver el secret (ya fue configurado y
-        # confirmado). Solo devolver el QR para re-escaneo si el usuario lo pide
-        # explícitamente, pero NUNCA el secret en texto plano.
+
+
         if usuario.mfa_habilitado:
             return Response({
                 'mfa_activo': True,
@@ -139,7 +132,7 @@ class MFASetupView(APIView):
             usuario.mfa_secret = generar_secret_totp()
             usuario.save(update_fields=['mfa_secret'])
         qr_b64 = generar_qr_totp(usuario)
-        # El secret solo se expone una vez, durante la configuración inicial
+
         return Response({'qr_base64': qr_b64, 'secret': usuario.mfa_secret, 'mfa_activo': False})
 
     def post(self, request):
@@ -166,7 +159,7 @@ class MFASetupView(APIView):
 
 
 class PasswordResetRequestView(APIView):
-    """AC-05: Solicitar reset de contraseña por email."""
+
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -175,7 +168,7 @@ class PasswordResetRequestView(APIView):
         if not email:
             return Response({'detail': 'Email requerido.'}, status=400)
 
-        # Responder igual independientemente de si el email existe (seguridad)
+
         try:
             usuario = UsuarioInterno.objects.get(email=email, estado='ACTIVO')
             token = secrets.token_urlsafe(48)
@@ -199,7 +192,7 @@ class PasswordResetRequestView(APIView):
                 fail_silently=True,
             )
         except UsuarioInterno.DoesNotExist:
-            pass  # No revelar si el email existe
+            pass
 
         return Response(
             {'detail': 'Si el email está registrado, recibirás las instrucciones en breve.'}
@@ -207,7 +200,7 @@ class PasswordResetRequestView(APIView):
 
 
 class PasswordResetConfirmView(APIView):
-    """AC-05: Confirmar reset con el token recibido por email."""
+
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -221,7 +214,7 @@ class PasswordResetConfirmView(APIView):
             return Response(
                 {'detail': 'La contraseña debe tener al menos 8 caracteres.'}, status=400
             )
-        # Validación adicional: la contraseña no debe ser solo numérica
+
         if password.isdigit():
             return Response(
                 {'detail': 'La contraseña no puede ser completamente numérica.'}, status=400
@@ -238,7 +231,7 @@ class PasswordResetConfirmView(APIView):
             usuario.intentos_fallidos = 0
             if usuario.estado == 'BLOQUEADO':
                 usuario.estado = 'ACTIVO'
-            # (ultimo_acceso, mfa_secret, etc.) en caso de actualización concurrente.
+
             usuario.save(update_fields=[
                 'password', 'reset_token', 'reset_token_expira',
                 'intentos_fallidos', 'estado',
@@ -249,11 +242,8 @@ class PasswordResetConfirmView(APIView):
 
 
 class SetupStatusView(APIView):
-    """
-    GET /api/auth/setup/status/
-    Devuelve si la plataforma ya fue configurada.
-    Endpoint público — usado por el wizard del frontend.
-    """
+
+
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -265,21 +255,16 @@ class SetupStatusView(APIView):
 
 
 class SetupView(APIView):
-    """
-    POST /api/auth/setup/
-    Crea el primer superadministrador.
-    Se bloquea automáticamente después del primer uso.
-    """
+
+
     permission_classes = [AllowAny]
 
-    # antes de la configuración inicial, potencialmente como DoS o para
-    # observar tiempos de respuesta durante el primer setup.
-    # Limitamos a 5 intentos por IP en una ventana de 10 minutos.
+
     _MAX_INTENTOS = 5
     _VENTANA_SEGUNDOS = 600
 
     def _verificar_rate_limit(self, request) -> bool:
-        """Devuelve True si la IP está dentro del límite, False si excedió."""
+
         try:
             from django.core.cache import cache
             xff = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -291,13 +276,13 @@ class SetupView(APIView):
             cache.set(key, intentos + 1, self._VENTANA_SEGUNDOS)
             return True
         except Exception:
-            return True  # Si el cache falla, no bloquear
+            return True
 
     def post(self, request):
         from apps.administracion.models import UsuarioInterno
         from django.db import transaction
 
-        # Double-checked locking: primera comprobación rápida (sin lock)
+
         if UsuarioInterno.objects.filter(rol='SUPERVISOR', is_superuser=True).exists():
             return Response(
                 {'detail': 'La plataforma ya fue configurada. Este endpoint está deshabilitado.'},
@@ -313,23 +298,24 @@ class SetupView(APIView):
         nombre            = request.data.get('nombre', '').strip()
         apellido          = request.data.get('apellido', '').strip()
         email             = request.data.get('email', '').strip().lower()
-        password          = request.data.get('password', '')
+        contrasena        = request.data.get('password', '')
         nombre_plataforma = request.data.get('nombre_plataforma', 'AuditCore').strip()
 
-        # Validaciones
+
+        _MSG_REQUERIDO = 'Requerido.'
         errores = {}
-        if not nombre:   errores['nombre']   = 'Requerido.'
-        if not apellido: errores['apellido'] = 'Requerido.'
-        if not email:    errores['email']    = 'Requerido.'
+        if not nombre:   errores['nombre']   = _MSG_REQUERIDO
+        if not apellido: errores['apellido'] = _MSG_REQUERIDO
+        if not email:    errores['email']    = _MSG_REQUERIDO
         elif '@' not in email: errores['email'] = 'Email inválido.'
-        if len(password) < 8:
+        if len(contrasena) < 8:
             errores['password'] = 'Mínimo 8 caracteres.'
         if errores:
             return Response(errores, status=400)
 
         try:
             with transaction.atomic():
-                # Segunda comprobación dentro del bloque atómico para evitar race condition
+
                 if UsuarioInterno.objects.select_for_update().filter(rol='SUPERVISOR', is_superuser=True).exists():
                     return Response(
                         {'detail': 'La plataforma ya fue configurada. Este endpoint está deshabilitado.'},
@@ -341,7 +327,7 @@ class SetupView(APIView):
 
                 usuario = UsuarioInterno.objects.create_superuser(
                     email=email,
-                    password=password,
+                    password=contrasena,
                     nombre=nombre,
                     apellido=apellido,
                     rol='SUPERVISOR',

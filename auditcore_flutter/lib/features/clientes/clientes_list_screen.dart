@@ -7,7 +7,7 @@ import '../../core/services/providers.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/widgets.dart';
 
-// ── Lista de Clientes ────────────────────────────────────────────────────
+
 class ClientesListScreen extends ConsumerStatefulWidget {
   const ClientesListScreen({super.key});
   @override
@@ -41,7 +41,7 @@ class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
     final usuario   = authState.valueOrNull;
     final clientesAsync = ref.watch(clientesProvider);
 
-    // Solo SUPERVISOR y ASESOR pueden crear clientes (alineado con CanCreateClientes en backend)
+
     final puedeCrearClientes = ['SUPERVISOR', 'ASESOR'].contains(usuario?.rol ?? '');
 
     return AppShell(
@@ -63,7 +63,7 @@ class _ClientesListScreenState extends ConsumerState<ClientesListScreen> {
       ],
       child: Column(
         children: [
-          // Barra de filtros
+
           Container(
             color: AppColors.white,
             padding: const EdgeInsets.all(14),
@@ -201,7 +201,7 @@ class _ClienteTile extends StatelessWidget {
   }
 }
 
-// ── Detalle del Cliente ──────────────────────────────────────────────────
+
 class ClienteDetailScreen extends ConsumerWidget {
   final String id;
   const ClienteDetailScreen({super.key, required this.id});
@@ -235,7 +235,7 @@ class ClienteDetailScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
 
-            // Cabecera
+
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -361,4 +361,3 @@ class _InfoRow extends StatelessWidget {
   );
 }
 
-// ── Formulario de Cliente ────────────────────────────────────────────────

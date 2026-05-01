@@ -23,7 +23,7 @@ import '../features/setup/setup_screen.dart';
 import '../features/calendario/calendario_screen.dart';
 import '../features/perfil/preferencias_mfa_screen.dart';
 
-// ── Splash genérico ───────────────────────────────────────────────────────
+
 class _SplashScreen extends StatelessWidget {
   const _SplashScreen();
   @override
@@ -57,7 +57,7 @@ class _SplashScreen extends StatelessWidget {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
-  // Escuchamos AMBOS providers para refrescar el router
+
   final authNotifier = ValueNotifier<bool>(false);
   ref.listen(authProvider, (_, __) {
     authNotifier.value = !authNotifier.value;
@@ -74,7 +74,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final setupAsync  = ref.read(setupStatusProvider);
       final location    = state.matchedLocation;
 
-      // Mientras verifica auth o setup → splash
+
       if (authState is AsyncLoading || setupAsync is AsyncLoading) {
         return location == '/splash' ? null : '/splash';
       }
@@ -86,14 +86,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           || location == '/verificar'
           || location == '/setup';
 
-      // Desde splash: primero verificar si el sistema está configurado
+
       if (location == '/splash') {
-        if (!isConfigured) return '/setup';   // ← primer uso
+        if (!isConfigured) return '/setup';
         if (!isLoggedIn)  return '/login';
         return '/dashboard';
       }
 
-      // Si ya está configurado y alguien intenta acceder a /setup → redirigir
+
       if (location == '/setup' && isConfigured) {
         return isLoggedIn ? '/dashboard' : '/login';
       }
@@ -108,7 +108,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/login',     name: 'login',     builder: (_, __) => const LoginScreen()),
       GoRoute(path: '/dashboard', name: 'dashboard', builder: (_, __) => const DashboardScreen()),
 
-      // Clientes
+
       GoRoute(
         path: '/clientes', name: 'clientes',
         builder: (_, __) => const ClientesListScreen(),
@@ -118,7 +118,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             redirect: (context, state) {
               final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
               if (!['SUPERVISOR', 'ASESOR'].contains(rol)) {
-                return '/clientes'; // Redirigir al listado sin mensaje de error
+                return '/clientes';
               }
               return null;
             },
@@ -147,7 +147,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         ],
       ),
 
-      // Expedientes
+
       GoRoute(
         path: '/expedientes', name: 'expedientes',
         builder: (_, __) => const ExpedientesListScreen(),
@@ -174,8 +174,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         name: 'certificaciones',
         builder: (_, __) => const CertificacionesScreen(),
         routes: [
-          // FIX Bug 7: ruta de creación de certificaciones — antes no existía.
-          // Usa push desde la lista para mantener el botón "atrás".
+
+
           GoRoute(
             path: 'nueva',
             name: 'certificacion-nueva',
@@ -189,11 +189,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/chat', name: 'chat',
         redirect: (context, state) {
-          // FIX: verificar que el usuario tiene un rol con acceso al chatbot.
-          // BUG ORIGINAL: cualquier usuario autenticado accedía a /chat sin
-          // verificación de rol, lo que podía causar un 403 en el POST a
-          // enviar_mensaje o un 4003 en el WebSocket — experiencia confusa.
-          // Con el guard aquí, se redirige antes de mostrar la pantalla.
+
+
           final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
           const rolesPermitidos = ['SUPERVISOR', 'AUDITOR', 'ASESOR', 'AUXILIAR', 'REVISOR'];
           if (!rolesPermitidos.contains(rol)) return '/dashboard';
@@ -205,7 +202,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/portal', name: 'portal',
         redirect: (context, state) {
-          // FIX: solo EJECUTIVO y ADMIN acceden al portal de cliente
+
           final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
           if (rol != 'SUPERVISOR' && rol != 'ASESOR') return '/dashboard';
           return null;
@@ -215,7 +212,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/admin-panel', name: 'admin-panel',
         redirect: (context, state) {
-          // FIX: solo ADMIN puede acceder al panel de administración
+
           final rol = ref.read(authProvider).valueOrNull?.rol ?? '';
           if (rol != 'SUPERVISOR') return '/dashboard';
           return null;
@@ -223,9 +220,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, __) => const AdminPanelScreen(),
       ),
 
-      // FIX: estas rutas estaban fuera del array routes[] — GoRouter nunca las
-      // registraba, causando que /calendario y /perfil/mfa cayeran siempre en
-      // el errorBuilder en lugar de mostrar la pantalla correcta.
+
       GoRoute(
         path: '/calendario', name: 'calendario',
         redirect: (context, state) {

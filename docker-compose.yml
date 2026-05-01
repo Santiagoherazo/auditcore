@@ -1,6 +1,9 @@
 # ── Variables comunes reutilizadas en backend, celery_worker y celery_beat ──
-# Usar &anchor y *alias de YAML elimina la duplicación de estas variables.
+# Usar &anchor y *alias de YAML elimina la duplicación de estas variables
+# que SonarQube reporta como code smell en docker-compose.
 # Para cambiar el modelo Ollama o el settings module, modificar aquí una sola vez.
+# NOTA: x-common-env debe estar al nivel raíz (no dentro de services:) para que
+# Docker Compose v2 lo reconozca como extension field y no lo valide como servicio.
 x-common-env: &common-env
   DATABASE_URL: postgres://${POSTGRES_USER:-auditcore_user}:${POSTGRES_PASSWORD:-auditcore_dev_CAMBIAR_EN_PROD}@postgres:5432/auditcore
   REDIS_URL: redis://redis:6379/0

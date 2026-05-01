@@ -63,7 +63,7 @@ class _VerificarScreenState extends ConsumerState<VerificarScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
           child: Column(children: [
-            // Header
+
             Container(
               width: 56, height: 56,
               decoration: BoxDecoration(
@@ -85,7 +85,7 @@ class _VerificarScreenState extends ConsumerState<VerificarScreen> {
             ),
             const SizedBox(height: 28),
 
-            // Input
+
             TextField(
               controller: _ctrl,
               style: const TextStyle(fontSize: 13),
@@ -116,7 +116,7 @@ class _VerificarScreenState extends ConsumerState<VerificarScreen> {
               ),
             ),
 
-            // Resultado
+
             if (_resultado != null) ...[
               const SizedBox(height: 24),
               Container(
@@ -180,7 +180,7 @@ class _VerificarScreenState extends ConsumerState<VerificarScreen> {
               ),
             ],
 
-            // Error
+
             if (_error != null) ...[
               const SizedBox(height: 16),
               Container(

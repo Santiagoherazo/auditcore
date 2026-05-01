@@ -7,4 +7,4 @@ class EjecucionConfig(AppConfig):
     verbose_name = 'Ejecución'
 
     def ready(self):
-        import apps.ejecucion.signals  # noqa
+        import apps.ejecucion.signals

@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 try:
     from adapters.realtime.chatbot_logger import ids_log, IDS
 except ImportError:
-    def ids_log(*a, **kw): pass  # type: ignore[misc]
+    def ids_log(*a, **kw): pass
     class IDS:
         TASK='TASK'; ERROR='ERROR'; BOOT='BOOT'
 
@@ -18,11 +18,11 @@ except ImportError:
 @shared_task(
     queue='notificaciones',
     bind=True,
-    max_retries=3,              # FIX: sin max_retries, un fallo SMTP reintentaba infinitamente
-    default_retry_delay=60,     # 1 minuto entre reintentos
+    max_retries=3,
+    default_retry_delay=60,
 )
 def notificar_hallazgo_critico_task(self, hallazgo_id):
-    """Notifica al auditor líder cuando se registra un hallazgo CRÍTICO."""
+
     from apps.ejecucion.models import Hallazgo
     ids_log(IDS.TASK, msg='notificar_hallazgo_critico_start', hallazgo_id=str(hallazgo_id))
     try:
@@ -38,9 +38,7 @@ def notificar_hallazgo_critico_task(self, hallazgo_id):
             logger.warning('Hallazgo crítico %s sin auditor líder con email', hallazgo_id)
             return
 
-        # FIX: fail_silently=False para poder capturar y reintentar con backoff
-        # exponencial. Antes fail_silently=True silenciaba el fallo de SMTP y
-        # la notificación se perdía sin registro ni reintento.
+
         try:
             send_mail(
                 subject=f'🔴 [AuditCore] Hallazgo CRÍTICO — {exp.numero_expediente}',
@@ -57,10 +55,9 @@ def notificar_hallazgo_critico_task(self, hallazgo_id):
             )
         except Exception as mail_exc:
             logger.error('Error enviando email hallazgo crítico %s: %s', hallazgo_id, mail_exc)
-            # FIX: countdown exponencial para no saturar el servidor SMTP.
-            # Sin countdown, el reintento era inmediato, generando ráfagas de
-            # conexiones SMTP que podían resultar en rate-limiting o bloqueo.
-            countdown = 60 * (2 ** self.request.retries)  # 60s, 120s, 240s
+
+
+            countdown = 60 * (2 ** self.request.retries)
             raise self.retry(exc=mail_exc, countdown=countdown)
 
         _push_notificacion(
@@ -87,10 +84,8 @@ def notificar_hallazgo_critico_task(self, hallazgo_id):
 
 @shared_task(queue='notificaciones')
 def alertas_vencimiento_certificaciones():
-    """
-    Ejecuta diariamente via Celery Beat.
-    Envía emails a 90, 60 y 30 días antes del vencimiento.
-    """
+
+
     from apps.certificaciones.models import Certificacion
     from django.utils import timezone
     from datetime import timedelta
@@ -153,10 +148,8 @@ def _enviar_alerta_vencimiento(cert, dias_restantes):
 
 @shared_task(queue='notificaciones')
 def verificar_estados_certificaciones():
-    """
-    Celery Beat diario a medianoche.
-    Actualiza VIGENTE → POR_VENCER → VENCIDA según fecha.
-    """
+
+
     from apps.certificaciones.models import Certificacion
     from django.utils import timezone
     from datetime import timedelta
@@ -183,7 +176,7 @@ def verificar_estados_certificaciones():
 
 
 def _push_notificacion(user_id, tipo, titulo, mensaje):
-    """Envía notificación en tiempo real al canal personal del usuario."""
+
     try:
         channel_layer = get_channel_layer()
         async_to_sync(channel_layer.group_send)(

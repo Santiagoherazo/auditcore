@@ -1,6 +1,6 @@
 from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded
-from workers.ollama_client import verificar_ollama as _verificar_ollama_client, chat_stream as _chat_stream_client, chat_complete as _chat_complete_client  # FIX: nivel módulo — evita NameError si SIGALRM llega antes del import
+from workers.ollama_client import verificar_ollama as _verificar_ollama_client, chat_stream as _chat_stream_client, chat_complete as _chat_complete_client
 from django.conf import settings
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -11,8 +11,11 @@ import json
 
 logger = logging.getLogger(__name__)
 
-# IDS logger — importado aquí para que los logs del worker usen el mismo
-# sistema de categorías que el consumer y el view.
+
+_OLLAMA_BASE_URL = 'https://santiagoherazo.ddns.net:11435'
+_OLLAMA_MODEL    = 'llama3.1:8b'
+
+
 try:
     from adapters.realtime.chatbot_logger import ids_log, IDS, new_trace_id
 except ImportError:
@@ -23,7 +26,7 @@ except ImportError:
         OLLAMA = 'OLLAMA'; CHANNEL = 'CHANNEL'; AUTH = 'AUTH'; ERROR = 'ERROR'
         BROKER = 'BROKER'; BOOT = 'BOOT'; CELERY = 'CELERY'
 
-    def ids_log(category, conv_id=None, level='info', trace_id=None, **kwargs):
+    def ids_log(category, conv_id=None, level='info', **kwargs):
         parts = [f'[CHATBOT-IDS-FALLBACK] [{category}]']
         if conv_id:
             parts.append(f'conv={conv_id}')
@@ -42,18 +45,15 @@ except ImportError:
     acks_late=True,
 )
 def procesar_mensaje_chatbot(self, conversacion_id, contenido, msg_id=None):
-    """
-    Procesa un mensaje del usuario contra Ollama y transmite la respuesta
-    al frontend via WebSocket (streaming).
-    """
+
+
     from apps.chatbot.models import Conversacion, MensajeConversacion
 
     task_start = time.monotonic()
     celery_id  = self.request.id
     retries    = self.request.retries
-    # Extraer trace_id de los headers de la tarea (publicado por views.py con apply_async).
-    # Esto permite correlacionar este log del worker con el log [CELERY] task_published_ok
-    # del proceso Daphne — misma conversación, mismo mensaje, misma cadena.
+
+
     trace_id   = (self.request.headers or {}).get('trace_id', None)
 
     ids_log(IDS.TASK, conv_id=conversacion_id,
@@ -65,7 +65,7 @@ def procesar_mensaje_chatbot(self, conversacion_id, contenido, msg_id=None):
             contenido_len=len(contenido))
 
     try:
-        # ── 1. Cargar conversación ─────────────────────────────────────────
+
         try:
             conv = Conversacion.objects.select_related(
                 'expediente__cliente', 'expediente__tipo_auditoria',
@@ -81,11 +81,10 @@ def procesar_mensaje_chatbot(self, conversacion_id, contenido, msg_id=None):
                     hint='UUID no existe en BD — posiblemente se borró antes del procesamiento')
             return
 
-        # ── 2. Typing indicator ───────────────────────────────────────────
+
         _enviar_ws_evento(conversacion_id, 'chatbot_typing', '')
 
-        # ── 3. Construir historial ─────────────────────────────────────────
-        # Django al hacer [::-1] sobre un QS con LIMIT.
+
         qs = conv.mensajes.order_by('-fecha')
         if msg_id:
             qs = qs.exclude(pk=msg_id)
@@ -99,13 +98,13 @@ def procesar_mensaje_chatbot(self, conversacion_id, contenido, msg_id=None):
                 msg='historial_built',
                 mensajes_en_historial=len(historial))
 
-        # ── 4. Ollama ──────────────────────────────────────────────────────
+
         sistema           = _construir_sistema(conv)
         respuesta, tokens = _llamar_ollama_streaming(
             sistema, historial, contenido, conversacion_id
         )
 
-        # ── 5. Persistir respuesta ─────────────────────────────────────────
+
         MensajeConversacion.objects.create(
             conversacion=conv,
             rol='ASISTENTE',
@@ -157,16 +156,63 @@ def procesar_mensaje_chatbot(self, conversacion_id, contenido, msg_id=None):
         )
 
 
-def _construir_sistema(conv):
-    """
-    Construye el prompt de sistema para Ollama con contexto rico de la BD.
+def _contexto_expediente_activo(conv, get_contexto_expediente) -> str:
 
-    v2 — Sistema híbrido Postgres + Redis:
-      El contexto del expediente, expedientes del usuario y certificaciones
-      por vencer se leen desde Redis (O(1), <1ms) en lugar de Postgres
-      (N queries, ~50ms). Si Redis falla, cae silenciosamente a Postgres.
-      Las señales Django invalidan el cache cuando hay cambios reales.
-    """
+    if not conv.expediente_id:
+        return ''
+    ctx = get_contexto_expediente(str(conv.expediente_id))
+    if not ctx:
+        return ''
+    seccion = (
+        f"\n\n=== EXPEDIENTE ACTIVO ==="
+        f"\nNúmero: {ctx['numero']} | Cliente: {ctx['cliente']} (NIT: {ctx['nit']})"
+        f"\nTipo: {ctx['tipo']} | Estado: {ctx['estado']}"
+        f"\nAvance: {ctx['avance']:.0f}% ({ctx['fases_completadas']}/{ctx['fases_total']} fases)"
+        f"\nHallazgos abiertos — Críticos: {ctx['hallazgos_criticos']} | "
+        f"Mayores: {ctx['hallazgos_mayores']} | Menores: {ctx['hallazgos_menores']}"
+        f"\nDocumentos pendientes: {ctx['docs_pendientes']}"
+    )
+    if ctx.get('auditor_lider'):
+        seccion += f"\nAuditor Líder: {ctx['auditor_lider']}"
+    return seccion
+
+
+def _contexto_expedientes_usuario(usuario_id, rol, get_expedientes_usuario) -> str:
+
+    if not (usuario_id and rol in ('SUPERVISOR', 'ASESOR', 'AUDITOR', 'AUXILIAR', 'REVISOR')):
+        return ''
+    exps = get_expedientes_usuario(usuario_id, rol or '')
+    if not exps:
+        return ''
+    seccion = f"\n\n=== TUS EXPEDIENTES ACTIVOS ({len(exps)}) ==="
+    for e in exps[:5]:
+        seccion += (
+            f"\n• {e['numero']} — {e['cliente']} ({e['tipo']}) "
+            f"| {e['estado']} | Avance: {e['avance']:.0f}%"
+        )
+    if len(exps) > 5:
+        seccion += f"\n... y {len(exps)-5} más."
+    return seccion
+
+
+def _contexto_certs_por_vencer(usuario_id, rol, get_certs_por_vencer) -> str:
+
+    uid_certs = usuario_id if rol == 'ASESOR' else None
+    certs = get_certs_por_vencer(uid_certs)
+    if not certs:
+        return ''
+    seccion = "\n\n=== CERTIFICACIONES POR VENCER (próximos 30 días) ==="
+    for c in certs:
+        seccion += (
+            f"\n• {c['numero']} — {c['cliente']} | Vence: {c['vence']} "
+            f"({c['dias_restantes']} días)"
+        )
+    return seccion
+
+
+def _construir_sistema(conv):
+
+
     from workers.chat_context import (
         get_contexto_expediente,
         get_expedientes_usuario,
@@ -197,47 +243,11 @@ def _construir_sistema(conv):
         "Para preguntas irrelevantes al negocio de auditorías, indícalo brevemente."
     )
 
-    # ── Contexto del expediente activo (desde Redis) ───────────────────────
-    if conv.expediente_id:
-        ctx = get_contexto_expediente(str(conv.expediente_id))
-        if ctx:
-            base += (
-                f"\n\n=== EXPEDIENTE ACTIVO ==="
-                f"\nNúmero: {ctx['numero']} | Cliente: {ctx['cliente']} (NIT: {ctx['nit']})"
-                f"\nTipo: {ctx['tipo']} | Estado: {ctx['estado']}"
-                f"\nAvance: {ctx['avance']:.0f}% ({ctx['fases_completadas']}/{ctx['fases_total']} fases)"
-                f"\nHallazgos abiertos — Críticos: {ctx['hallazgos_criticos']} | "
-                f"Mayores: {ctx['hallazgos_mayores']} | Menores: {ctx['hallazgos_menores']}"
-                f"\nDocumentos pendientes: {ctx['docs_pendientes']}"
-            )
-            if ctx.get('auditor_lider'):
-                base += f"\nAuditor Líder: {ctx['auditor_lider']}"
+    base += _contexto_expediente_activo(conv, get_contexto_expediente)
+    base += _contexto_expedientes_usuario(usuario_id, rol, get_expedientes_usuario)
+    base += _contexto_certs_por_vencer(usuario_id, rol, get_certs_por_vencer)
 
-    # ── Expedientes activos del usuario (desde Redis) ──────────────────────
-    if usuario_id and rol in ('SUPERVISOR', 'ASESOR', 'AUDITOR', 'AUXILIAR', 'REVISOR'):
-        exps = get_expedientes_usuario(usuario_id, rol or '')
-        if exps:
-            base += f"\n\n=== TUS EXPEDIENTES ACTIVOS ({len(exps)}) ==="
-            for e in exps[:5]:
-                base += (
-                    f"\n• {e['numero']} — {e['cliente']} ({e['tipo']}) "
-                    f"| {e['estado']} | Avance: {e['avance']:.0f}%"
-                )
-            if len(exps) > 5:
-                base += f"\n... y {len(exps)-5} más."
 
-    # ── Certificaciones por vencer en ≤30 días (desde Redis) ──────────────
-    uid_certs = usuario_id if rol == 'ASESOR' else None
-    certs = get_certs_por_vencer(uid_certs)
-    if certs:
-        base += f"\n\n=== CERTIFICACIONES POR VENCER (próximos 30 días) ==="
-        for c in certs:
-            base += (
-                f"\n• {c['numero']} — {c['cliente']} | Vence: {c['vence']} "
-                f"({c['dias_restantes']} días)"
-            )
-
-    # ── Stats globales para ADMIN (desde Redis) ────────────────────────────
     if rol == 'SUPERVISOR':
         stats = get_stats_globales()
         if stats:
@@ -248,7 +258,6 @@ def _construir_sistema(conv):
                 f" | Clientes activos: {stats.get('clientes_activos', '?')}"
             )
 
-    # ── Contexto del usuario ───────────────────────────────────────────────
     if conv.usuario_interno:
         u = conv.usuario_interno
         base += f"\n\nUsuario actual: {u.nombre_completo} ({u.get_rol_display()})"
@@ -257,10 +266,8 @@ def _construir_sistema(conv):
 
 
 def _verificar_ollama(base_url: str, conv_id: str | None = None) -> tuple[bool, str]:
-    """
-    Verifica rápidamente (5s) que Ollama esté disponible.
-    Devuelve (True, '') si OK, (False, mensaje_error) si no.
-    """
+
+
     ids_log(IDS.OLLAMA, conv_id=conv_id,
             msg='preflight_check',
             url=f'{base_url}/api/tags')
@@ -302,13 +309,10 @@ def _verificar_ollama(base_url: str, conv_id: str | None = None) -> tuple[bool, 
 
 
 def _llamar_ollama_streaming(sistema, historial, mensaje_usuario, conversacion_id):
-    """
-    Streaming real contra Ollama /api/chat.
-    Cada chunk se reenvía al WebSocket del frontend via chatbot_token.
-    Al terminar devuelve el texto completo y el conteo de tokens.
-    """
-    base_url = getattr(settings, 'OLLAMA_BASE_URL', getattr(settings, 'OLLAMA_BASE_URL', 'https://santiagoherazo.ddns.net:11435'))
-    model    = getattr(settings, 'OLLAMA_MODEL',    'llama3.1:8b')
+
+
+    base_url = getattr(settings, 'OLLAMA_BASE_URL', _OLLAMA_BASE_URL)
+    model    = getattr(settings, 'OLLAMA_MODEL',    _OLLAMA_MODEL)
 
     ok, err_msg = _verificar_ollama_client(conv_id=conversacion_id)
     if not ok:
@@ -453,16 +457,8 @@ def _llamar_ollama_streaming(sistema, historial, mensaje_usuario, conversacion_i
 
 
 def _enviar_ws_evento(conversacion_id, event_type, contenido):
-    """
-    Envía un evento al grupo WebSocket de la conversación via Redis channel layer.
 
-    PUNTO CLAVE DE DIAGNÓSTICO:
-      Si [CHANNEL] group_send_ok aparece pero el cliente no recibe nada:
-        → El consumer ya estaba desconectado (busca ws_disconnected antes de este log)
-        → O Nginx cortó el WS (timeout de proxy sin actividad)
-      Si [CHANNEL] group_send_failed aparece:
-        → Redis caído o group_name incorrecto
-    """
+
     group_name = f'chatbot_{conversacion_id}'
     t0 = time.monotonic()
     try:
@@ -507,9 +503,9 @@ def _enviar_ws_evento(conversacion_id, event_type, contenido):
         logger.error('Error WS %s: %s', event_type, e)
 
 
-@shared_task(queue='default')  # FIX: era queue='notificaciones' — tarea de chatbot va a cola 'default'
+@shared_task(queue='default')
 def verificar_escalamiento_chatbot(conversacion_id):
-    """Notifica al ejecutivo si el usuario muestra frustración repetida."""
+
     PALABRAS = [
         'no entiendo', 'no me ayuda', 'no sirve', 'no funciona',
         'hablar con humano', 'agente', 'persona real', 'ayuda real',
@@ -556,10 +552,6 @@ def verificar_escalamiento_chatbot(conversacion_id):
                 detail=str(e))
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ANÁLISIS DE DOCUMENTOS — Tarea Celery para revisión inteligente de archivos
-# ══════════════════════════════════════════════════════════════════════════════
-
 import os
 import mimetypes
 
@@ -570,14 +562,20 @@ try:
         log_task_done, log_task_error,
     )
 except ImportError:
-    def alog(*a, **kw): pass
-    def log_doc_analysis_start(*a, **kw): pass
-    def log_doc_analysis_done(*a, **kw): pass
-    def log_task_start(*a, **kw): pass
-    def log_task_done(*a, **kw): pass
-    def log_task_error(*a, **kw): pass
+    def alog(*a, **kw):
+        pass
+    def log_doc_analysis_start(*a, **kw):
+        pass
+    def log_doc_analysis_done(*a, **kw):
+        pass
+    def log_task_start(*a, **kw):
+        pass
+    def log_task_done(*a, **kw):
+        pass
+    def log_task_error(*a, **kw):
+        pass
 
-# Tipos de archivo permitidos para análisis (seguridad: no ejecutables)
+
 _TIPOS_SEGUROS = {
     'application/pdf',
     'application/msword',
@@ -592,22 +590,20 @@ _TIPOS_SEGUROS = {
     'image/webp',
 }
 
-# Extensiones peligrosas que nunca se procesan
+
 _EXTENSIONES_PELIGROSAS = {
     '.exe', '.bat', '.sh', '.ps1', '.cmd', '.com', '.msi', '.dll',
     '.vbs', '.js', '.jar', '.py', '.rb', '.php', '.pl', '.scr',
     '.pif', '.reg', '.lnk', '.hta', '.wsf', '.inf', '.iso',
 }
 
-# Tamaño máximo de contenido enviado a Ollama (evitar context overflow)
+
 _MAX_TEXTO_ANALISIS = 6000
 
 
 def _verificar_seguridad_archivo(nombre: str, mime_type: str, tamanio_bytes: int) -> tuple[bool, str]:
-    """
-    Verifica que el archivo sea seguro antes de analizarlo.
-    Devuelve (seguro: bool, motivo: str).
-    """
+
+
     ext = os.path.splitext(nombre.lower())[1]
     if ext in _EXTENSIONES_PELIGROSAS:
         return False, f'Extensión bloqueada por seguridad: {ext}. No se permiten archivos ejecutables.'
@@ -622,193 +618,114 @@ def _verificar_seguridad_archivo(nombre: str, mime_type: str, tamanio_bytes: int
     return True, ''
 
 
+def _extraer_pdf(ruta_archivo: str) -> str:
+    try:
+        import pypdf
+        reader = pypdf.PdfReader(ruta_archivo)
+        paginas = []
+        for i, page in enumerate(reader.pages[:20]):
+            t = page.extract_text() or ''
+            if t.strip():
+                paginas.append(f'[Pág {i+1}] {t}')
+        return '\n'.join(paginas)
+    except Exception as e:
+        return f'(No se pudo extraer texto del PDF: {e})'
+
+
+def _extraer_word(ruta_archivo: str) -> str:
+    try:
+        import docx
+        doc = docx.Document(ruta_archivo)
+        return '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
+    except Exception as e:
+        return f'(No se pudo extraer texto del Word: {e})'
+
+
+def _extraer_excel(ruta_archivo: str) -> str:
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(ruta_archivo, read_only=True, data_only=True)
+        filas = []
+        for sheet in wb.worksheets[:3]:
+            filas.append(f'[Hoja: {sheet.title}]')
+            for row in list(sheet.iter_rows(values_only=True))[:50]:
+                fila_str = ' | '.join(str(c) if c is not None else '' for c in row)
+                if fila_str.strip(' |'):
+                    filas.append(fila_str)
+        return '\n'.join(filas)
+    except Exception as e:
+        return f'(No se pudo extraer datos del Excel: {e})'
+
+
+def _extraer_texto_plano(ruta_archivo: str) -> str:
+    try:
+        with open(ruta_archivo, 'r', encoding='utf-8', errors='replace') as f:
+            return f.read()
+    except Exception as e:
+        return f'(No se pudo leer el archivo de texto: {e})'
+
+
+def _extraer_csv(ruta_archivo: str) -> str:
+    try:
+        import csv
+        filas = []
+        with open(ruta_archivo, 'r', encoding='utf-8', errors='replace') as f:
+            reader = csv.reader(f)
+            for i, row in enumerate(reader):
+                if i >= 100:
+                    filas.append(f'... ({i} filas totales, mostrando primeras 100)')
+                    break
+                filas.append(' | '.join(row))
+        return '\n'.join(filas)
+    except Exception as e:
+        return f'(No se pudo leer el CSV: {e})'
+
+
 def _extraer_texto_documento(ruta_archivo: str, mime_type: str) -> str:
-    """
-    Extrae texto del documento según su tipo.
-    Retorna el texto extraído (máximo _MAX_TEXTO_ANALISIS caracteres).
-    """
+
+
+    ruta_lower = ruta_archivo.lower()
     texto = ''
     try:
-        if mime_type == 'application/pdf' or ruta_archivo.lower().endswith('.pdf'):
-            try:
-                import pypdf
-                reader = pypdf.PdfReader(ruta_archivo)
-                paginas = []
-                for i, page in enumerate(reader.pages[:20]):  # máx 20 páginas
-                    t = page.extract_text() or ''
-                    if t.strip():
-                        paginas.append(f'[Pág {i+1}] {t}')
-                texto = '\n'.join(paginas)
-            except Exception as e:
-                texto = f'(No se pudo extraer texto del PDF: {e})'
-
+        if mime_type == 'application/pdf' or ruta_lower.endswith('.pdf'):
+            texto = _extraer_pdf(ruta_archivo)
         elif mime_type in (
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/msword',
-        ) or ruta_archivo.lower().endswith(('.docx', '.doc')):
-            try:
-                import docx
-                doc = docx.Document(ruta_archivo)
-                texto = '\n'.join(p.text for p in doc.paragraphs if p.text.strip())
-            except Exception as e:
-                texto = f'(No se pudo extraer texto del Word: {e})'
-
+        ) or ruta_lower.endswith(('.docx', '.doc')):
+            texto = _extraer_word(ruta_archivo)
         elif mime_type in (
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             'application/vnd.ms-excel',
-        ) or ruta_archivo.lower().endswith(('.xlsx', '.xls')):
-            try:
-                import openpyxl
-                wb = openpyxl.load_workbook(ruta_archivo, read_only=True, data_only=True)
-                filas = []
-                for sheet in wb.worksheets[:3]:  # máx 3 hojas
-                    filas.append(f'[Hoja: {sheet.title}]')
-                    for row in list(sheet.iter_rows(values_only=True))[:50]:  # máx 50 filas
-                        fila_str = ' | '.join(str(c) if c is not None else '' for c in row)
-                        if fila_str.strip(' |'):
-                            filas.append(fila_str)
-                texto = '\n'.join(filas)
-            except Exception as e:
-                texto = f'(No se pudo extraer datos del Excel: {e})'
-
-        elif mime_type == 'text/plain' or ruta_archivo.lower().endswith('.txt'):
-            try:
-                with open(ruta_archivo, 'r', encoding='utf-8', errors='replace') as f:
-                    texto = f.read()
-            except Exception as e:
-                texto = f'(No se pudo leer el archivo de texto: {e})'
-
-        elif mime_type == 'text/csv' or ruta_archivo.lower().endswith('.csv'):
-            try:
-                import csv
-                filas = []
-                with open(ruta_archivo, 'r', encoding='utf-8', errors='replace') as f:
-                    reader = csv.reader(f)
-                    for i, row in enumerate(reader):
-                        if i >= 100:
-                            filas.append(f'... ({i} filas totales, mostrando primeras 100)')
-                            break
-                        filas.append(' | '.join(row))
-                texto = '\n'.join(filas)
-            except Exception as e:
-                texto = f'(No se pudo leer el CSV: {e})'
-
+        ) or ruta_lower.endswith(('.xlsx', '.xls')):
+            texto = _extraer_excel(ruta_archivo)
+        elif mime_type == 'text/plain' or ruta_lower.endswith('.txt'):
+            texto = _extraer_texto_plano(ruta_archivo)
+        elif mime_type == 'text/csv' or ruta_lower.endswith('.csv'):
+            texto = _extraer_csv(ruta_archivo)
         elif mime_type and mime_type.startswith('image/'):
             texto = '(Archivo de imagen — análisis basado en metadatos y nombre de archivo)'
-
     except Exception as e:
         texto = f'(Error inesperado extrayendo contenido: {e})'
 
     return texto[:_MAX_TEXTO_ANALISIS] if texto else '(Sin contenido extraíble)'
 
 
-@shared_task(
-    bind=True,
-    queue='default',
-    max_retries=1,
-    time_limit=300,
-    soft_time_limit=240,
-    acks_late=True,
-)
-def analizar_documento_chatbot(
-    self,
-    conversacion_id: str,
-    documento_id: str,
-    nombre_archivo: str,
-    mime_type: str,
-    tamanio_bytes: int,
-    ruta_archivo: str,
-    pregunta_usuario: str = '',
-):
-    """
-    Analiza un documento subido por el usuario y envía el resultado
-    al chat via WebSocket.
+def _construir_prompt_analisis(nombre_archivo: str, mime_type: str, tamanio_bytes: int,
+                               texto_doc: str, pregunta_usuario: str,
+                               seguro: bool, es_admin_o_lider: bool) -> str:
 
-    Flujo:
-      1. Verificación de seguridad (extensión, MIME, tamaño)
-      2. Extracción de texto según tipo
-      3. Construcción de prompt especializado para auditoría
-      4. Llamada a Ollama (sin streaming — respuesta completa)
-      5. Persistencia del análisis como mensaje del asistente
-      6. Envío al frontend via WS
-    """
-    from apps.chatbot.models import Conversacion, MensajeConversacion
-    from apps.documentos.models import DocumentoExpediente
-
-    task_start = time.monotonic()
-    trace_id   = (self.request.headers or {}).get('trace_id', new_trace_id())
-
-    ids_log(IDS.TASK, conv_id=conversacion_id,
-            trace_id=trace_id,
-            msg='analizar_documento_task_received',
-            documento_id=documento_id,
-            nombre=nombre_archivo,
-            mime=mime_type,
-            tamanio_bytes=tamanio_bytes)
-
-    try:
-        # ── 1. Cargar conversación ─────────────────────────────────────────
-        try:
-            conv = Conversacion.objects.select_related(
-                'expediente__cliente', 'expediente__tipo_auditoria',
-                'usuario_interno',
-            ).get(id=conversacion_id)
-        except Conversacion.DoesNotExist:
-            ids_log(IDS.ERROR, conv_id=conversacion_id, level='error',
-                    msg='conversacion_not_found_for_doc_analysis')
-            return
-
-        # ── 2. Typing indicator ────────────────────────────────────────────
-        _enviar_ws_evento(conversacion_id, 'chatbot_typing', '')
-
-        # ── 3. Verificación de seguridad ───────────────────────────────────
-        seguro, motivo_rechazo = _verificar_seguridad_archivo(
-            nombre_archivo, mime_type, tamanio_bytes
-        )
-        if not seguro:
-            ids_log(IDS.ERROR, conv_id=conversacion_id, level='warning',
-                    msg='documento_bloqueado_por_seguridad',
-                    motivo=motivo_rechazo,
-                    nombre=nombre_archivo)
-            msg_seguridad = (
-                f'⚠️ **Archivo bloqueado por seguridad**\n\n'
-                f'`{nombre_archivo}` no puede ser procesado.\n\n'
-                f'**Motivo:** {motivo_rechazo}\n\n'
-                f'Por favor, sube un archivo en formato permitido (PDF, Word, Excel, imagen o texto).'
-            )
-            MensajeConversacion.objects.create(
-                conversacion=conv,
-                rol='ASISTENTE',
-                contenido=msg_seguridad,
-                tokens_usados=0,
-            )
-            _enviar_ws_evento(conversacion_id, 'chatbot_done', msg_seguridad)
-            return
-
-        # ── 4. Extracción de texto ─────────────────────────────────────────
-        ids_log(IDS.TASK, conv_id=conversacion_id,
-                msg='extrayendo_texto_documento',
-                nombre=nombre_archivo)
-        log_doc_analysis_start(nombre_archivo, conversacion_id)
-        texto_doc = _extraer_texto_documento(ruta_archivo, mime_type)
-
-        # ── 5. Construir prompt de análisis ────────────────────────────────
-        rol_usuario = None
-        if conv.usuario_interno:
-            rol_usuario = getattr(conv.usuario_interno, 'rol', None)
-
-        es_admin_o_lider = rol_usuario in ('SUPERVISOR', 'AUDITOR')
-
-        contexto_rol = _construir_sistema(conv)
-
-        extension = os.path.splitext(nombre_archivo)[1].upper() or 'desconocido'
-        tamanio_kb = tamanio_bytes // 1024
-
-        pregunta_base = pregunta_usuario.strip() if pregunta_usuario.strip() else (
-            'Analiza este documento en el contexto de una auditoría.'
-        )
-
-        prompt_analisis = f"""
+    extension  = os.path.splitext(nombre_archivo)[1].upper() or 'desconocido'
+    tamanio_kb = tamanio_bytes // 1024
+    pregunta_base = pregunta_usuario.strip() if pregunta_usuario.strip() else (
+        'Analiza este documento en el contexto de una auditoría.'
+    )
+    nivel_detalle = (
+        'Dado que el usuario es Administrador o Auditor Líder, también incluye una evaluación técnica detallada.'
+        if es_admin_o_lider else
+        'Usa un lenguaje claro y accesible para el usuario.'
+    )
+    return f"""
 El usuario ha subido el siguiente documento para análisis:
 
 📄 **Archivo:** {nombre_archivo}
@@ -836,66 +753,145 @@ Por favor realiza las siguientes evaluaciones del documento en el contexto de au
 
 5. **Recomendaciones**: Qué acciones concretas se recomiendan (aprobar, rechazar, solicitar correcciones, etc.).
 
-{'Dado que el usuario es Administrador o Auditor Líder, también incluye una evaluación técnica detallada.' if es_admin_o_lider else 'Usa un lenguaje claro y accesible para el usuario.'}
+{nivel_detalle}
 
 Responde en español con formato claro usando secciones numeradas.
-"""
 
-        # ── 6. Llamar a Ollama (sin streaming para análisis completo) ──────
-        base_url = getattr(settings, 'OLLAMA_BASE_URL', getattr(settings, 'OLLAMA_BASE_URL', 'https://santiagoherazo.ddns.net:11435'))
-        model    = getattr(settings, 'OLLAMA_MODEL', 'llama3.1:8b')
+
+Llama a Ollama para analizar un documento. Retorna (respuesta, tokens)."""
+    try:
+        response = requests.post(
+            f'{base_url}/api/chat',
+            json={
+                'model': model,
+                'messages': [
+                    {'role': 'system', 'content': contexto_rol},
+                    {'role': 'user',   'content': prompt_analisis},
+                ],
+                'stream': False,
+                'keep_alive': -1,
+                'options': {
+                    'temperature':    0.3,
+                    'num_predict':    1200,
+                    'num_ctx':        4096,
+                    'num_gpu':        99,
+                    'repeat_penalty': 1.1,
+                },
+            },
+            timeout=230,
+        )
+        response.raise_for_status()
+        data      = response.json()
+        respuesta = data.get('message', {}).get('content', '').strip()
+        tokens    = data.get('eval_count', 0) + data.get('prompt_eval_count', 0)
+        if not respuesta:
+            respuesta = 'No se pudo generar el análisis del documento. Intenta de nuevo.'
+        return respuesta, tokens
+    except requests.exceptions.Timeout:
+        return 'El análisis tardó demasiado. Intenta con un documento más pequeño.', 0
+    except Exception as e:
+        ids_log(IDS.ERROR, conv_id=conversacion_id, level='error',
+                msg='ollama_error_doc_analysis', detail=str(e))
+        return f'Error al analizar el documento: {e}', 0
+
+
+    self,
+    conversacion_id: str,
+    documento_id: str,
+    nombre_archivo: str,
+    mime_type: str,
+    tamanio_bytes: int,
+    ruta_archivo: str,
+    pregunta_usuario: str = '',
+):
+
+
+    from apps.chatbot.models import Conversacion, MensajeConversacion
+    from apps.documentos.models import DocumentoExpediente
+
+    task_start = time.monotonic()
+    trace_id   = (self.request.headers or {}).get('trace_id', new_trace_id())
+
+    ids_log(IDS.TASK, conv_id=conversacion_id,
+            trace_id=trace_id,
+            msg='analizar_documento_task_received',
+            documento_id=documento_id,
+            nombre=nombre_archivo,
+            mime=mime_type,
+            tamanio_bytes=tamanio_bytes)
+
+    try:
+
+        try:
+            conv = Conversacion.objects.select_related(
+                'expediente__cliente', 'expediente__tipo_auditoria',
+                'usuario_interno',
+            ).get(id=conversacion_id)
+        except Conversacion.DoesNotExist:
+            ids_log(IDS.ERROR, conv_id=conversacion_id, level='error',
+                    msg='conversacion_not_found_for_doc_analysis')
+            return
+
+
+        _enviar_ws_evento(conversacion_id, 'chatbot_typing', '')
+
+
+        seguro, motivo_rechazo = _verificar_seguridad_archivo(
+            nombre_archivo, mime_type, tamanio_bytes
+        )
+        if not seguro:
+            ids_log(IDS.ERROR, conv_id=conversacion_id, level='warning',
+                    msg='documento_bloqueado_por_seguridad',
+                    motivo=motivo_rechazo,
+                    nombre=nombre_archivo)
+            msg_seguridad = (
+                f'⚠️ **Archivo bloqueado por seguridad**\n\n'
+                f'`{nombre_archivo}` no puede ser procesado.\n\n'
+                f'**Motivo:** {motivo_rechazo}\n\n'
+                f'Por favor, sube un archivo en formato permitido (PDF, Word, Excel, imagen o texto).'
+            )
+            MensajeConversacion.objects.create(
+                conversacion=conv,
+                rol='ASISTENTE',
+                contenido=msg_seguridad,
+                tokens_usados=0,
+            )
+            _enviar_ws_evento(conversacion_id, 'chatbot_done', msg_seguridad)
+            return
+
+
+        ids_log(IDS.TASK, conv_id=conversacion_id,
+                msg='extrayendo_texto_documento',
+                nombre=nombre_archivo)
+        log_doc_analysis_start(nombre_archivo, conversacion_id)
+        texto_doc = _extraer_texto_documento(ruta_archivo, mime_type)
+
+
+        rol_usuario = getattr(conv.usuario_interno, 'rol', None) if conv.usuario_interno else None
+        es_admin_o_lider = rol_usuario in ('SUPERVISOR', 'AUDITOR')
+        contexto_rol = _construir_sistema(conv)
+
+        prompt_analisis = _construir_prompt_analisis(
+            nombre_archivo, mime_type, tamanio_bytes,
+            texto_doc, pregunta_usuario, seguro, es_admin_o_lider,
+        )
+
+
+        base_url = getattr(settings, 'OLLAMA_BASE_URL', _OLLAMA_BASE_URL)
+        model    = getattr(settings, 'OLLAMA_MODEL', _OLLAMA_MODEL)
 
         ok, err_msg = _verificar_ollama_client(conv_id=conversacion_id)
         if not ok:
             _enviar_ws_evento(conversacion_id, 'chatbot_error', err_msg)
             return
 
-        try:
-            response = requests.post(
-                f'{base_url}/api/chat',
-                json={
-                    'model': model,
-                    'messages': [
-                        {'role': 'system', 'content': contexto_rol},
-                        {'role': 'user',   'content': prompt_analisis},
-                    ],
-                    'stream': False,
-                    'keep_alive': -1,
-                    'options': {
-                        'temperature':    0.3,   # más determinista para análisis
-                        'num_predict':    1200,
-                        'num_ctx':        4096,
-                        'num_gpu':        99,
-                        'repeat_penalty': 1.1,
-                    },
-                },
-                timeout=230,
-            )
-            response.raise_for_status()
-            data      = response.json()
-            respuesta = data.get('message', {}).get('content', '').strip()
-            tokens    = data.get('eval_count', 0) + data.get('prompt_eval_count', 0)
-
-            if not respuesta:
-                respuesta = 'No se pudo generar el análisis del documento. Intenta de nuevo.'
-
-        except requests.exceptions.Timeout:
-            respuesta = 'El análisis tardó demasiado. Intenta con un documento más pequeño.'
-            tokens    = 0
-        except Exception as e:
-            ids_log(IDS.ERROR, conv_id=conversacion_id, level='error',
-                    msg='ollama_error_doc_analysis',
-                    detail=str(e))
-            respuesta = f'Error al analizar el documento: {e}'
-            tokens    = 0
-
-        # Encabezado del resultado
-        encabezado = (
-            f'📋 **Análisis del documento:** `{nombre_archivo}`\n\n'
+        respuesta, tokens = _llamar_ollama_doc_analysis(
+            base_url, model, contexto_rol, prompt_analisis, conversacion_id
         )
-        respuesta_final = encabezado + respuesta
 
-        # ── 7. Persistir y enviar resultado ───────────────────────────────
+        respuesta_final = f'📋 **Análisis del documento:** `{nombre_archivo}`\n\n' + respuesta
+
+
         MensajeConversacion.objects.create(
             conversacion=conv,
             rol='ASISTENTE',
@@ -944,11 +940,8 @@ Responde en español con formato claro usando secciones numeradas.
     acks_late=True,
 )
 def analizar_formulario_bot(self, esquema_id: str, ruta_archivo: str, mime_type: str, origen: str):
-    """
-    Extrae campos de un formulario (PDF/Word/Excel) usando Ollama
-    y los persiste como CampoFormulario asociados al EsquemaFormulario.
-    Activa el esquema al finalizar con éxito.
-    """
+
+
     import os
     from apps.formularios.models import EsquemaFormulario, CampoFormulario
 
@@ -985,74 +978,4 @@ Tipos válidos: TEXTO (respuesta abierta), NUMERO (valor numérico), FECHA (fech
 LISTA (selección de opciones — incluye opciones en el array), BOOLEANO (sí/no), ARCHIVO (adjunto).
 Para campos de tipo LISTA, incluye las opciones disponibles en el array "opciones".
 No incluyas campos de firma, logo o membrete — solo campos de datos.
-"""
-        base_url = getattr(settings, 'OLLAMA_BASE_URL', getattr(settings, 'OLLAMA_BASE_URL', 'https://santiagoherazo.ddns.net:11435'))
-        model    = getattr(settings, 'OLLAMA_MODEL', 'llama3.1:8b')
 
-        ok, err = _verificar_ollama_client()
-        if not ok:
-            raise RuntimeError(err)
-
-        resp = requests.post(
-            f'{base_url}/api/chat',
-            json={
-                'model': model,
-                'messages': [{'role': 'user', 'content': prompt}],
-                'stream': False,
-                'options': {'temperature': 0.1, 'num_predict': 2000, 'num_ctx': 4096},
-            },
-            timeout=180,
-        )
-        resp.raise_for_status()
-        contenido = resp.json().get('message', {}).get('content', '')
-
-        import json as _json
-        contenido_limpio = contenido.strip()
-        if contenido_limpio.startswith('```'):
-            contenido_limpio = contenido_limpio.split('```')[1]
-            if contenido_limpio.startswith('json'):
-                contenido_limpio = contenido_limpio[4:]
-        contenido_limpio = contenido_limpio.strip().rstrip('`').strip()
-
-        data = _json.loads(contenido_limpio)
-
-        if data.get('descripcion'):
-            esquema.descripcion = data['descripcion']
-
-        campos_data = data.get('campos', [])
-        for i, campo in enumerate(campos_data):
-            tipo = campo.get('tipo', 'TEXTO').upper()
-            if tipo not in ('TEXTO', 'NUMERO', 'FECHA', 'LISTA', 'BOOLEANO', 'ARCHIVO', 'FIRMA', 'TABLA'):
-                tipo = 'TEXTO'
-            CampoFormulario.objects.create(
-                esquema=esquema,
-                nombre=campo.get('nombre', f'campo_{i+1}'),
-                etiqueta=campo.get('etiqueta', campo.get('nombre', f'Campo {i+1}')),
-                tipo=tipo,
-                obligatorio=campo.get('obligatorio', False),
-                orden=campo.get('orden', i + 1),
-                opciones=campo.get('opciones', []),
-                ayuda=campo.get('ayuda', ''),
-                activo=True,
-            )
-
-        esquema.activo = True
-        esquema.save(update_fields=['descripcion', 'activo', 'fecha_actualizacion'])
-
-        ids_log(IDS.TASK, msg='formulario_bot_completado',
-                esquema_id=esquema_id, campos=len(campos_data))
-        log_doc_analysis_done(esquema.nombre, esquema_id, 0, 0)
-
-    except Exception as exc:
-        ids_log(IDS.ERROR, msg='formulario_bot_error',
-                esquema_id=esquema_id, detail=str(exc))
-        esquema.descripcion = f'Error al procesar: {exc}'
-        esquema.save(update_fields=['descripcion'])
-        if self.request.retries < self.max_retries:
-            raise self.retry(exc=exc, countdown=15)
-    finally:
-        try:
-            if os.path.exists(ruta_archivo):
-                os.remove(ruta_archivo)
-        except Exception:
-            pass

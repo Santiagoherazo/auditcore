@@ -8,9 +8,8 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # nit estaba en max_length=20 (migración 0001) pero el modelo
-        # define max_length=30. NITs colombianos con formato '900.123.456-7'
-        # y cédulas largas necesitan los 30 chars.
+
+
         migrations.AlterField(
             model_name='cliente',
             name='nit',

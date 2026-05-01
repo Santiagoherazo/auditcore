@@ -34,7 +34,7 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png', 'mp4', 'mov', 'mp3', 'wav'],
-      withData: true, // necesario para web (bytes)
+      withData: true,
     );
     if (result != null && result.files.isNotEmpty) {
       setState(() => _archivo = result.files.first);
@@ -50,7 +50,7 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
       ));
       return;
     }
-    // FIX: guardia anti-doble-submit
+
     if (_cargando) return;
     setState(() => _cargando = true);
     try {
@@ -80,8 +80,8 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
             const SnackBar(content: Text('Hallazgo registrado correctamente.')));
       }
     } on DioException catch (e) {
-      // 500 post-creación (señal de notificación crítica/WebSocket) —
-      // el hallazgo ya fue guardado correctamente.
+
+
       if (e.response?.statusCode == 500) {
         ref.invalidate(hallazgosProvider(widget.expedienteId));
         if (mounted) {
@@ -149,7 +149,7 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    // Tipo y criticidad en fila
+
                     Row(children: [
                       Expanded(
                         child: Column(
@@ -208,7 +208,7 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
                       ),
                     ]),
 
-                    // Alerta crítico
+
                     if (_criticidad == 'CRITICO') ...[
                       const SizedBox(height: 10),
                       Container(
@@ -233,7 +233,7 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
                     ],
                     const SizedBox(height: 14),
 
-                    // Título
+
                     const Text('Título *',
                         style: TextStyle(fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -249,7 +249,7 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    // Descripción
+
                     const Text('Descripción detallada *',
                         style: TextStyle(fontSize: 12,
                             fontWeight: FontWeight.w500,
@@ -271,7 +271,7 @@ class _HallazgoFormState extends ConsumerState<HallazgoFormScreen> {
               ),
               const SizedBox(height: 12),
 
-              // Evidencia
+
               Card(
                 child: Padding(
                   padding: const EdgeInsets.all(16),

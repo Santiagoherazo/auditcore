@@ -17,7 +17,10 @@ from apps.chatbot.models import Conversacion, MensajeConversacion
 from apps.expedientes.models import VisitaAgendada
 
 
-# ── Usuarios ──────────────────────────────────────────────────────────────────
+CLIENTE_RAZON_SOCIAL = 'cliente.razon_social'
+TIPO_AUDITORIA_NOMBRE = 'tipo_auditoria.nombre'
+
+
 class UsuarioInternoSerializer(serializers.ModelSerializer):
     nombre_completo    = serializers.ReadOnlyField()
     permisos_efectivos = serializers.SerializerMethodField()
@@ -79,7 +82,6 @@ class UsuarioUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
-# ── Clientes ──────────────────────────────────────────────────────────────────
 class SedeClienteSerializer(serializers.ModelSerializer):
     class Meta:
         model  = SedeCliente
@@ -107,7 +109,7 @@ class ContactoClienteSerializer(serializers.ModelSerializer):
 
 
 class AccesoTemporalSerializer(serializers.ModelSerializer):
-    cliente_nombre = serializers.ReadOnlyField(source='cliente.razon_social')
+    cliente_nombre = serializers.ReadOnlyField(source=CLIENTE_RAZON_SOCIAL)
     esta_vigente   = serializers.ReadOnlyField()
 
     class Meta:
@@ -142,10 +144,7 @@ class ClienteSerializer(serializers.ModelSerializer):
     sedes         = SedeClienteSerializer(many=True, read_only=True)
     asesor_nombre = serializers.SerializerMethodField()
 
-    # Campos que en el modelo tienen blank=True pero DRF URLField/EmailField
-    # validan el formato incluso cuando el valor es vacío. Se declaran explícitamente
-    # con allow_blank=True para que el formulario pueda enviar cadenas vacías en los
-    # pasos donde aún no se ha completado esa información.
+
     rep_legal_email    = serializers.EmailField(allow_blank=True, required=False, default='')
     email              = serializers.EmailField(allow_blank=True, required=False, default='')
     sitio_web          = serializers.URLField(allow_blank=True, required=False, default='')
@@ -160,38 +159,38 @@ class ClienteSerializer(serializers.ModelSerializer):
         model  = Cliente
         fields = [
             'id', 'tipo_persona',
-            # Perfil Legal
+
             'razon_social', 'nit', 'digito_verificacion', 'matricula_mercantil',
             'fecha_constitucion', 'duracion_empresa', 'objeto_social',
             'codigo_ciiu', 'regimen_tributario', 'responsable_iva',
-            # Representante Legal
+
             'rep_legal_nombre', 'rep_legal_documento', 'rep_legal_tipo_doc',
             'rep_legal_cargo', 'rep_legal_email', 'rep_legal_telefono',
-            # Ubicación
+
             'pais', 'departamento', 'ciudad', 'direccion_principal',
             'codigo_postal', 'sedes_adicionales',
-            # Contacto
+
             'telefono', 'telefono_alt', 'email', 'sitio_web', 'linkedin',
-            # Segmentación
+
             'sector', 'subsector', 'tamano', 'num_empleados', 'ingresos_anuales',
-            # Alcance
+
             'tipos_auditoria_solicitados', 'alcance_descripcion',
             'normas_interes', 'tiene_certificacion_previa',
             'certificacion_previa_detalle',
-            # Necesidad
+
             'motivo_auditoria', 'declaracion_necesidad',
             'urgencia', 'fecha_limite_deseada',
-            # Estado
+
             'estado', 'caracterizacion_completada', 'fecha_caracterizacion',
             'asesor_responsable', 'asesor_nombre',
             'notas', 'fecha_creacion', 'fecha_actualizacion',
-            # Relaciones
+
             'contactos', 'sedes',
         ]
         read_only_fields = [
             'id', 'fecha_creacion', 'fecha_actualizacion',
             'caracterizacion_completada', 'fecha_caracterizacion',
-            'estado',  # El estado se cambia solo a través de flujos controlados (acciones específicas)
+            'estado',
         ]
 
     @extend_schema_field(serializers.CharField(allow_null=True))
@@ -209,23 +208,39 @@ class ClienteSerializer(serializers.ModelSerializer):
         return value
 
 
-# ── Tipos de Auditoría ────────────────────────────────────────────────────────
 class FaseTipoSerializer(serializers.ModelSerializer):
+    tipo_auditoria = serializers.PrimaryKeyRelatedField(
+        queryset=TipoAuditoria.objects.all(), write_only=True, required=False)
+
     class Meta:
         model  = FaseTipoAuditoria
-        fields = ['id', 'nombre', 'descripcion', 'orden', 'duracion_estimada_dias', 'es_fase_final']
+        fields = ['id', 'tipo_auditoria', 'nombre', 'descripcion', 'orden',
+                  'duracion_estimada_dias', 'es_fase_final']
+        read_only_fields = ['id']
 
 
 class ChecklistItemSerializer(serializers.ModelSerializer):
+    tipo_auditoria = serializers.PrimaryKeyRelatedField(
+        queryset=TipoAuditoria.objects.all(), write_only=True, required=False)
+    fase = serializers.PrimaryKeyRelatedField(
+        queryset=FaseTipoAuditoria.objects.all(),
+        allow_null=True, required=False, default=None)
+
     class Meta:
         model  = ChecklistItem
-        fields = ['id', 'codigo', 'descripcion', 'categoria', 'obligatorio', 'orden']
+        fields = ['id', 'tipo_auditoria', 'fase', 'codigo', 'descripcion',
+                  'categoria', 'obligatorio', 'orden']
+        read_only_fields = ['id']
 
 
 class DocumentoRequeridoSerializer(serializers.ModelSerializer):
+    tipo_auditoria = serializers.PrimaryKeyRelatedField(
+        queryset=TipoAuditoria.objects.all(), write_only=True, required=False)
+
     class Meta:
         model  = DocumentoRequerido
-        fields = ['id', 'nombre', 'descripcion', 'obligatorio', 'orden']
+        fields = ['id', 'tipo_auditoria', 'nombre', 'descripcion', 'obligatorio', 'orden']
+        read_only_fields = ['id']
 
 
 class TipoAuditoriaSerializer(serializers.ModelSerializer):
@@ -238,12 +253,11 @@ class TipoAuditoriaSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'codigo', 'nombre', 'descripcion', 'categoria', 'nivel',
             'certificacion_tipo', 'duracion_estimada_dias', 'version', 'activo',
-            'fases', 'checklist_items', 'documentos_requeridos',
+            'fecha_creacion', 'fases', 'checklist_items', 'documentos_requeridos',
         ]
-        read_only_fields = ['id', 'version']
+        read_only_fields = ['id', 'fecha_creacion']
 
 
-# ── Formularios ───────────────────────────────────────────────────────────────
 class CampoFormularioSerializer(serializers.ModelSerializer):
     class Meta:
         model  = CampoFormulario
@@ -280,7 +294,6 @@ class ValorFormularioSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'fecha_creacion']
 
 
-# ── Expedientes ───────────────────────────────────────────────────────────────
 class BitacoraSerializer(serializers.ModelSerializer):
     usuario_nombre = serializers.SerializerMethodField()
 
@@ -314,8 +327,8 @@ class AsignacionSerializer(serializers.ModelSerializer):
 
 
 class ExpedienteListSerializer(serializers.ModelSerializer):
-    cliente_nombre = serializers.ReadOnlyField(source='cliente.razon_social')
-    tipo_nombre    = serializers.ReadOnlyField(source='tipo_auditoria.nombre')
+    cliente_nombre = serializers.ReadOnlyField(source=CLIENTE_RAZON_SOCIAL)
+    tipo_nombre    = serializers.ReadOnlyField(source=TIPO_AUDITORIA_NOMBRE)
     auditor_nombre = serializers.ReadOnlyField(source='auditor_lider.nombre_completo')
 
     class Meta:
@@ -328,8 +341,8 @@ class ExpedienteListSerializer(serializers.ModelSerializer):
 
 
 class ExpedienteSerializer(serializers.ModelSerializer):
-    cliente_nombre = serializers.ReadOnlyField(source='cliente.razon_social')
-    tipo_nombre    = serializers.ReadOnlyField(source='tipo_auditoria.nombre')
+    cliente_nombre = serializers.ReadOnlyField(source=CLIENTE_RAZON_SOCIAL)
+    tipo_nombre    = serializers.ReadOnlyField(source=TIPO_AUDITORIA_NOMBRE)
     auditor_nombre = serializers.ReadOnlyField(source='auditor_lider.nombre_completo')
     fases          = FaseExpedienteSerializer(many=True, read_only=True)
     equipo         = AsignacionSerializer(many=True, read_only=True)
@@ -353,7 +366,6 @@ class ExpedienteSerializer(serializers.ModelSerializer):
         return data
 
 
-# ── Ejecución ─────────────────────────────────────────────────────────────────
 class HallazgoSerializer(serializers.ModelSerializer):
     reportado_nombre = serializers.ReadOnlyField(source='reportado_por.nombre_completo')
 
@@ -393,7 +405,6 @@ class ChecklistEjecucionSerializer(serializers.ModelSerializer):
         ]
 
 
-# ── Documentos ────────────────────────────────────────────────────────────────
 class DocumentoExpedienteSerializer(serializers.ModelSerializer):
     revisado_por_nombre = serializers.SerializerMethodField()
 
@@ -417,10 +428,9 @@ class DocumentoExpedienteSerializer(serializers.ModelSerializer):
         return None
 
 
-# ── Certificaciones ───────────────────────────────────────────────────────────
 class CertificacionSerializer(serializers.ModelSerializer):
-    cliente_nombre   = serializers.ReadOnlyField(source='cliente.razon_social')
-    tipo_nombre      = serializers.ReadOnlyField(source='tipo_auditoria.nombre')
+    cliente_nombre   = serializers.ReadOnlyField(source=CLIENTE_RAZON_SOCIAL)
+    tipo_nombre      = serializers.ReadOnlyField(source=TIPO_AUDITORIA_NOMBRE)
     dias_para_vencer = serializers.IntegerField(read_only=True, allow_null=True)
 
     class Meta:
@@ -443,7 +453,6 @@ class CertificacionSerializer(serializers.ModelSerializer):
         return data
 
 
-# ── Chatbot ───────────────────────────────────────────────────────────────────
 class MensajeSerializer(serializers.ModelSerializer):
     class Meta:
         model  = MensajeConversacion
@@ -457,7 +466,6 @@ class ConversacionSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'fecha_creacion', 'usuario_interno']
 
 
-# ── Visitas ───────────────────────────────────────────────────────────────────
 class VisitaAgendadaSerializer(serializers.ModelSerializer):
     creado_por_nombre  = serializers.CharField(source='creado_por.nombre_completo', read_only=True)
     expediente_numero  = serializers.CharField(source='expediente.numero_expediente', read_only=True)
@@ -478,7 +486,7 @@ class VisitaAgendadaSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.CharField(allow_null=True))
     def get_fase_nombre(self, obj) -> Optional[str]:
-        # fase es FK nullable — traversar de forma segura
+
         if obj.fase and obj.fase.fase_tipo:
             return obj.fase.fase_tipo.nombre
         return None

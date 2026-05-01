@@ -7,4 +7,4 @@ class ExpedientesConfig(AppConfig):
     verbose_name = 'Expedientes'
 
     def ready(self):
-        import apps.expedientes.signals  # noqa: F401 — registra señales
+        import apps.expedientes.signals

@@ -19,10 +19,10 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   final _pageCtrl = PageController();
   int  _paso      = 0;
   bool _cargando  = false;
-  String? _draftId;          // ID del borrador en Redis (null = aún no creado)
-  String? _clienteIdCreado; // ID del Cliente en PostgreSQL (solo tras commit)
+  String? _draftId;
+  String? _clienteIdCreado;
 
-  // Paso 1 — Perfil legal
+
   final _razonCtrl          = TextEditingController();
   final _nitCtrl            = TextEditingController();
   final _digitoCtrl         = TextEditingController();
@@ -34,7 +34,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   String  _regimenTrib      = 'COMUN';
   bool    _respIva          = true;
 
-  // Paso 2 — Representante legal
+
   final _repNombreCtrl      = TextEditingController();
   final _repDocCtrl         = TextEditingController();
   final _repCargoCtrl       = TextEditingController();
@@ -42,7 +42,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   final _repTelCtrl         = TextEditingController();
   String  _repTipoDoc       = 'CC';
 
-  // Paso 3 — Ubicación y contacto
+
   final _paisCtrl           = TextEditingController(text: 'Colombia');
   final _deptoCtrl          = TextEditingController();
   final _ciudadCtrl         = TextEditingController();
@@ -53,14 +53,14 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   final _emailCtrl          = TextEditingController();
   final _webCtrl            = TextEditingController();
 
-  // Paso 4 — Segmentación
+
   String  _sector           = 'OTRO';
   final _subsectorCtrl      = TextEditingController();
   String  _tamano           = 'MEDIANA';
   final _empleadosCtrl      = TextEditingController();
   final _ingresosCtrl       = TextEditingController();
 
-  // Paso 5 — Alcance y necesidad
+
   final _alcanceCtrl        = TextEditingController();
   final _normasCtrl         = TextEditingController();
   final _declaracionCtrl    = TextEditingController();
@@ -69,7 +69,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   bool    _certPrevia       = false;
   final _certPreviaDetalleCtrl = TextEditingController();
 
-  // Paso 6 — Contacto operativo
+
   final _contactoNombreCtrl  = TextEditingController();
   final _contactoApellidoCtrl= TextEditingController();
   final _contactoCargoCtrl   = TextEditingController();
@@ -105,25 +105,25 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
   }
 
-  // ── Parseo de errores DRF ─────────────────────────────────────────────────
+
   String _parsearErrorDRF(dynamic e) {
     if (e is DioException) {
       final resp = e.response;
       if (resp == null) {
-        // Error de red: sin respuesta del servidor
+
         return 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
       }
       final data = resp.data;
       if (data is Map) {
         final msgs = <String>[];
-        // 'detail' y 'non_field_errors' van primero — son el mensaje principal
+
         if (data.containsKey('detail')) {
           msgs.add(data['detail'].toString());
         } else if (data.containsKey('non_field_errors')) {
           final v = data['non_field_errors'];
           msgs.add(v is List ? (v as List).join(', ') : v.toString());
         }
-        // Errores de campo específicos
+
         data.forEach((key, val) {
           if (key == 'detail' || key == 'non_field_errors') return;
           if (val is List) {
@@ -135,7 +135,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
         if (msgs.isNotEmpty) return msgs.join('\n');
       }
       if (data is String && data.isNotEmpty) return data;
-      // Códigos HTTP conocidos sin body útil
+
       switch (resp.statusCode) {
         case 403: return 'No tienes permisos para realizar esta acción. Contacta al administrador.';
         case 401: return 'Sesión expirada. Por favor vuelve a iniciar sesión.';
@@ -147,24 +147,12 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     return e.toString();
   }
 
-  // ── Flujo de borrador Redis → PostgreSQL ───────────────────────────────────
-  //
-  // Cada "Siguiente" acumula datos en Redis sin tocar PostgreSQL.
-  // Solo el último paso hace el commit definitivo en la BD.
-  //
-  //  Paso 1    → POST  /api/clientes/draft/            → crea draft, guarda draft_id
-  //  Pasos 2-5 → PATCH /api/clientes/draft/{id}/       → merge parcial en Redis
-  //  Paso 6    → PATCH /api/clientes/draft/{id}/       → agrega contacto
-  //              POST  /api/clientes/draft/{id}/commit/ → persiste en PostgreSQL
-  //
-  // Si el usuario ya tenía un cliente (widget.clienteId != null → modo edición),
-  // el flujo original de PATCH directo a /api/clientes/{id}/ se mantiene intacto.
 
   Future<void> _guardarYAvanzar() async {
     if (_cargando) return;
     setState(() => _cargando = true);
     try {
-      // ── Modo edición: PATCH directo al cliente existente ──────────────────
+
       if (widget.clienteId != null) {
         final payload = _buildPayload();
         await ApiClient.instance.patch(
@@ -184,11 +172,11 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
         return;
       }
 
-      // ── Modo creación: flujo draft Redis ──────────────────────────────────
+
       final pasoActual = _buildPayload();
 
       if (_paso == 0) {
-        // Paso 1 → crear draft en Redis
+
         final resp = await ApiClient.instance.post(
           Endpoints.clienteDraft,
           data: pasoActual,
@@ -199,12 +187,12 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
       }
 
       if (_draftId == null) {
-        // Seguridad: no debería pasar, pero si el draft expiró mostramos error
+
         throw Exception('El borrador expiró. Por favor reinicia el formulario.');
       }
 
       if (_paso < _pasos.length - 1) {
-        // Pasos 2–5: merge parcial en Redis
+
         await ApiClient.instance.patch(
           Endpoints.clienteDraftUpdate(_draftId!),
           data: pasoActual,
@@ -213,8 +201,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
         return;
       }
 
-      // Paso final (6): merge del contacto + commit a PostgreSQL
-      // El payload del Paso 6 incluye los campos del contacto con prefijo 'contacto_'
+
       final contactoPayload = _buildContactoPayload();
       await ApiClient.instance.patch(
         Endpoints.clienteDraftUpdate(_draftId!),
@@ -257,8 +244,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     }
   }
 
-  /// Construye el payload del contacto operativo (Paso 6) con prefijo 'contacto_'
-  /// para que el draft_service los separe al hacer commit.
+
   Map<String, dynamic> _buildContactoPayload() {
     final nombre = _contactoNombreCtrl.text.trim();
     final email  = _contactoEmailCtrl.text.trim();
@@ -275,12 +261,9 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   }
 
 
-
   Map<String, dynamic> _buildPayload() {
-    // Solo campos que el serializer acepta explícitamente.
-    // NOTA: 'estado' se omite intencionalmente — es read_only en el backend
-    // y solo se puede cambiar a través del endpoint /cambiar-estado/.
-    // Enviarlo en PATCH sobreescribía el estado actual del cliente con 'PROSPECTO'.
+
+
     final raw = <String, dynamic>{
       'tipo_persona':    _tipoPersona,
       'razon_social':    _razonCtrl.text.trim(),
@@ -295,8 +278,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
           ? <String>[] : _normasCtrl.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
     };
 
-    // Campos opcionales — omitir si están vacíos para no provocar
-    // errores de validación en campos URLField/EmailField del serializer
+
     void addIfNotEmpty(String key, String value) {
       if (value.isNotEmpty) raw[key] = value;
     }
@@ -313,7 +295,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     addIfNotEmpty('rep_legal_documento',           _repDocCtrl.text.trim());
     addIfNotEmpty('rep_legal_tipo_doc',            _repTipoDoc);
     addIfNotEmpty('rep_legal_cargo',               _repCargoCtrl.text.trim());
-    // EmailField/URLField: solo enviar si no está vacío
+
     final repEmail = _repEmailCtrl.text.trim();
     if (repEmail.isNotEmpty && repEmail.contains('@')) raw['rep_legal_email'] = repEmail;
     addIfNotEmpty('rep_legal_telefono',            _repTelCtrl.text.trim());
@@ -324,23 +306,23 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
     addIfNotEmpty('codigo_postal',                 _cpCtrl.text.trim());
     addIfNotEmpty('telefono',                      _telCtrl.text.trim());
     addIfNotEmpty('telefono_alt',                  _tel2Ctrl.text.trim());
-    // EmailField
+
     final email = _emailCtrl.text.trim();
     if (email.isNotEmpty && email.contains('@')) raw['email'] = email;
-    // URLField
+
     final web = _webCtrl.text.trim();
     if (web.isNotEmpty) {
       final urlFinal = web.startsWith('http') ? web : 'https://$web';
       raw['sitio_web'] = urlFinal;
     }
     addIfNotEmpty('subsector',                     _subsectorCtrl.text.trim());
-    // ingresos_anuales es CharField en el modelo — enviar como string
+
     addIfNotEmpty('ingresos_anuales',              _ingresosCtrl.text.trim());
     addIfNotEmpty('alcance_descripcion',           _alcanceCtrl.text.trim());
     addIfNotEmpty('declaracion_necesidad',         _declaracionCtrl.text.trim());
     addIfNotEmpty('certificacion_previa_detalle',  _certPreviaDetalleCtrl.text.trim());
     addIfNotNull('num_empleados', int.tryParse(_empleadosCtrl.text.trim()));
-    // Fecha de constitución
+
     if (_fechaConstitucion != null && _fechaConstitucion!.isNotEmpty) {
       raw['fecha_constitucion'] = _fechaConstitucion;
     }
@@ -421,7 +403,7 @@ class _ClienteFormScreenState extends ConsumerState<ClienteFormScreen> {
   }
 }
 
-// ── Stepper visual ────────────────────────────────────────────────────────────
+
 class _Stepper extends StatelessWidget {
   final int paso;
   final List<String> pasos;
@@ -470,7 +452,7 @@ class _Stepper extends StatelessWidget {
   );
 }
 
-// ── Helpers compartidos ───────────────────────────────────────────────────────
+
 Widget _campo(String label, Widget child, {bool requerido = false}) =>
   Padding(padding: const EdgeInsets.only(bottom: 14), child:
     Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -515,7 +497,7 @@ Widget _navRow({required VoidCallback? onAnterior, required VoidCallback onSigui
           : Text(labelSig))),
     ]));
 
-// ── Paso 1: Perfil Legal ──────────────────────────────────────────────────────
+
 class _PasoPerfil extends StatelessWidget {
   final String tipoPersona;
   final void Function(String?) onTipoPersona;
@@ -593,7 +575,7 @@ class _PasoPerfil extends StatelessWidget {
     ]));
 }
 
-// ── Date picker field ─────────────────────────────────────────────────────────
+
 class _DatePickerField extends StatelessWidget {
   final String? value;
   final void Function(String?) onChanged;
@@ -650,7 +632,7 @@ class _DatePickerField extends StatelessWidget {
   );
 }
 
-// ── Tipo chip ─────────────────────────────────────────────────────────────────
+
 class _TipoChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -670,7 +652,7 @@ class _TipoChip extends StatelessWidget {
           color: selected ? Colors.white : AppColors.textSecondary))));
 }
 
-// ── Paso 2: Representante Legal ───────────────────────────────────────────────
+
 class _PasoRepresentante extends StatelessWidget {
   final TextEditingController nombreCtrl, docCtrl, cargoCtrl, emailCtrl, telCtrl;
   final String tipoDoc, tipoPersona;
@@ -720,7 +702,7 @@ class _PasoRepresentante extends StatelessWidget {
     ]));
 }
 
-// ── Paso 3: Ubicación y Contacto ──────────────────────────────────────────────
+
 class _PasoUbicacion extends StatelessWidget {
   final TextEditingController paisCtrl, deptoCtrl, ciudadCtrl, direccionCtrl,
       cpCtrl, telCtrl, tel2Ctrl, emailCtrl, webCtrl;
@@ -779,7 +761,7 @@ class _PasoUbicacion extends StatelessWidget {
     ]));
 }
 
-// ── Paso 4: Segmentación ──────────────────────────────────────────────────────
+
 class _PasoSegmentacion extends StatelessWidget {
   final String sector, tamano;
   final void Function(String?) onSector, onTamano;
@@ -836,7 +818,7 @@ class _PasoSegmentacion extends StatelessWidget {
     ]));
 }
 
-// ── Paso 5: Alcance y Necesidad ───────────────────────────────────────────────
+
 class _PasoAlcanceNecesidad extends StatelessWidget {
   final TextEditingController alcanceCtrl, normasCtrl, declaracionCtrl, certPreviaDetalleCtrl;
   final String motivo, urgencia;
@@ -900,7 +882,7 @@ class _PasoAlcanceNecesidad extends StatelessWidget {
     ]));
 }
 
-// ── Paso 6: Contacto Operativo ────────────────────────────────────────────────
+
 class _PasoContacto extends StatelessWidget {
   final String tipo;
   final void Function(String?) onTipo;

@@ -51,7 +51,7 @@ class PortalHomeScreen extends ConsumerWidget {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          // Bienvenida
+
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(20),
@@ -79,7 +79,7 @@ class PortalHomeScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
-          // Certificaciones vigentes
+
           const SectionHeader(titulo: 'Mis certificaciones'),
           certsAsync.when(
             loading: () => const LinearProgressIndicator(),
@@ -139,7 +139,7 @@ class PortalHomeScreen extends ConsumerWidget {
             },
           ),
 
-          // Auditorías activas
+
           const SectionHeader(titulo: 'Mis auditorías activas'),
           expsAsync.when(
             loading: () => const LinearProgressIndicator(),
@@ -212,7 +212,7 @@ class PortalHomeScreen extends ConsumerWidget {
           ),
 
           const SizedBox(height: 20),
-          // CTA verificar
+
           Card(
             child: ListTile(
               leading: const Icon(Icons.qr_code_scanner_outlined,

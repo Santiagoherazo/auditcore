@@ -1,11 +1,3 @@
-"""
-Script de datos iniciales (tipos de auditoría, fases y checklist).
-Ejecutar UNA sola vez DESPUÉS de completar el wizard de instalación:
-  python scripts/seed_data.py
-
-NOTA: El superusuario administrador se crea mediante el wizard de instalación
-en /setup — NO se crea aquí para evitar conflictos con el flujo de onboarding.
-"""
 import os, sys, django
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -14,7 +6,7 @@ django.setup()
 
 from apps.tipos_auditoria.models import TipoAuditoria, FaseTipoAuditoria, ChecklistItem, DocumentoRequerido
 
-# ── Tipos de auditoría ────────────────────────────────────────────────────
+
 TIPOS = [
     {
         'codigo': 'ISO27001', 'nombre': 'ISO 27001 — Seguridad de la Información',

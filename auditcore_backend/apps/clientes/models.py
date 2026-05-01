@@ -62,7 +62,7 @@ class Cliente(models.Model):
     tipo_persona = models.CharField(
         max_length=10, choices=TIPO_PERSONA_CHOICES, default='JURIDICA')
 
-    # ── Perfil Legal ───────────────────────────────────────────────────────
+
     razon_social        = models.CharField(max_length=255, help_text='Nombre legal completo')
     nit                 = models.CharField(max_length=30, unique=True, help_text='NIT, RUT o documento tributario')
     digito_verificacion = models.CharField(max_length=2, blank=True, help_text='Dígito de verificación del NIT')
@@ -75,7 +75,7 @@ class Cliente(models.Model):
         max_length=20, choices=REGIMEN_CHOICES, blank=True)
     responsable_iva     = models.BooleanField(default=True)
 
-    # ── Representante Legal ────────────────────────────────────────────────
+
     rep_legal_nombre      = models.CharField(max_length=200, blank=True)
     rep_legal_documento   = models.CharField(max_length=30, blank=True)
     rep_legal_tipo_doc    = models.CharField(max_length=10, blank=True,
@@ -84,7 +84,7 @@ class Cliente(models.Model):
     rep_legal_email       = models.EmailField(blank=True)
     rep_legal_telefono    = models.CharField(max_length=20, blank=True)
 
-    # ── Sedes y Ubicación ──────────────────────────────────────────────────
+
     pais            = models.CharField(max_length=100, default='Colombia')
     departamento    = models.CharField(max_length=100, blank=True)
     ciudad          = models.CharField(max_length=100, blank=True)
@@ -94,14 +94,14 @@ class Cliente(models.Model):
         default=list, blank=True,
         help_text='Lista de sedes: [{nombre, ciudad, direccion, telefono}]')
 
-    # ── Contacto General ──────────────────────────────────────────────────
+
     telefono        = models.CharField(max_length=20, blank=True)
     telefono_alt    = models.CharField(max_length=20, blank=True)
     email           = models.EmailField(blank=True)
     sitio_web       = models.URLField(blank=True)
     linkedin        = models.URLField(blank=True)
 
-    # ── Segmentación ───────────────────────────────────────────────────────
+
     sector          = models.CharField(max_length=20, choices=SECTOR_CHOICES, default='OTRO')
     subsector       = models.CharField(max_length=100, blank=True)
     tamano          = models.CharField(max_length=10, choices=TAMANO_CHOICES, blank=True)
@@ -109,7 +109,7 @@ class Cliente(models.Model):
     ingresos_anuales = models.CharField(max_length=50, blank=True,
                                          help_text='Rango de ingresos anuales estimados')
 
-    # ── Alcance del Servicio ───────────────────────────────────────────────
+
     tipos_auditoria_solicitados = models.JSONField(
         default=list, blank=True,
         help_text='IDs de tipos de auditoría de interés')
@@ -121,7 +121,7 @@ class Cliente(models.Model):
     tiene_certificacion_previa = models.BooleanField(default=False)
     certificacion_previa_detalle = models.TextField(blank=True)
 
-    # ── Declaración de Necesidad ───────────────────────────────────────────
+
     motivo_auditoria    = models.CharField(
         max_length=25, choices=NECESIDAD_CHOICES, blank=True)
     declaracion_necesidad = models.TextField(
@@ -132,7 +132,7 @@ class Cliente(models.Model):
         default='MEDIA', blank=True)
     fecha_limite_deseada = models.DateField(null=True, blank=True)
 
-    # ── Estado y Flujo ─────────────────────────────────────────────────────
+
     estado              = models.CharField(max_length=15, choices=ESTADO_CHOICES, default='PROSPECTO')
     caracterizacion_completada = models.BooleanField(default=False)
     fecha_caracterizacion      = models.DateTimeField(null=True, blank=True)
@@ -235,11 +235,8 @@ class ContactoCliente(models.Model):
 
 
 class AccesoTemporalCaracterizacion(models.Model):
-    """
-    Token de acceso temporal que se envía al cliente para que complete
-    el formulario de caracterización sin necesidad de crear una cuenta.
-    Expira en 7 días. Solo puede usarse una vez.
-    """
+
+
     id         = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     cliente    = models.ForeignKey(Cliente, on_delete=models.CASCADE, related_name='accesos_temporales')
     contacto   = models.ForeignKey(
@@ -279,10 +276,8 @@ class AccesoTemporalCaracterizacion(models.Model):
 
 
 class UsuarioCliente(models.Model):
-    """
-    Cuenta de portal para el cliente. Se crea automáticamente cuando
-    se activa el cliente y se vincula a su contacto principal.
-    """
+
+
     id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     contacto  = models.OneToOneField(
         ContactoCliente, on_delete=models.CASCADE, related_name='usuario')

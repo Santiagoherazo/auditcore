@@ -51,10 +51,8 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-    # DeepAuditMiddleware: logging profundo JSON-Lines a /app/logs/auditcore.log
-    # Complementa apps.seguridad.middleware.AuditLogMiddleware (BD, rutas sensibles).
-    # DEBE ir DESPUÉS de AuthenticationMiddleware para que _get_user() pueda
-    # leer request.user autenticado correctamente.
+
+
     'adapters.realtime.auditlog.DeepAuditMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
@@ -137,9 +135,8 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 25,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
-    # Handler personalizado: convierte DoesNotExist en 401 en endpoints de auth.
-    # Evita el 500 cuando el usuario del token ya no existe en la BD
-    # (por ejemplo, tras recrear contenedores con volúmenes limpios).
+
+
     'EXCEPTION_HANDLER': 'config.exceptions.drf_exception_handler',
 }
 
@@ -147,8 +144,8 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'AuditCore API',
     'DESCRIPTION': 'API REST para la plataforma de gestión de auditorías y certificaciones.',
     'VERSION': '1.0.0',
-    # que aparecen en múltiples modelos con distintos choices.
-    # Sin esto drf-spectacular genera nombres crípticos como Rol4a4Enum / Estado2b9Enum.
+
+
     'ENUM_NAME_OVERRIDES': {
         'RolUsuarioEnum':         'apps.administracion.models.UsuarioInterno.ROL_CHOICES',
         'EstadoUsuarioEnum':      'apps.administracion.models.UsuarioInterno.ESTADO_CHOICES',
@@ -158,19 +155,11 @@ SPECTACULAR_SETTINGS = {
         'EstadoDocumentoEnum':    'apps.documentos.models.DocumentoExpediente.ESTADO_CHOICES',
         'EstadoConversacionEnum': 'apps.chatbot.models.Conversacion.ESTADO_CHOICES',
     },
-    # No exponer el schema JSON en producción directamente desde la URL /api/schema/
+
     'SERVE_INCLUDE_SCHEMA': False,
 }
 
-# RabbitMQ como broker de tareas; Redis para resultados y Channel Layer
-# heartbeat=120 en la URL: el cliente negocia 120s con el servidor.
-# RabbitMQ expira la conexión tras 2× el valor negociado (240s), dando amplio
-# margen al worker para enviar pings cada 60s (CELERY_BROKER_HEARTBEAT).
-# En Docker, RABBITMQ_URL la inyecta docker-compose en el entorno del contenedor.
-# python-decouple puede capturar la variable ANTES de que el entorno esté completo
-# durante el arranque de Daphne (proceso ASGI multi-thread), devolviendo '' o None
-# → kombu interpreta host vacío como 'localhost' → Connection refused (errno 111).
-# os.environ.get() siempre lee el entorno actual del proceso sin ese riesgo.
+
 _RABBITMQ_DEFAULT = 'amqp://auditcore:auditcore2026@rabbitmq:5672/auditcore?heartbeat=120'
 RABBITMQ_URL      = os.environ.get('RABBITMQ_URL') or config('RABBITMQ_URL', default=_RABBITMQ_DEFAULT)
 CELERY_BROKER_URL = RABBITMQ_URL
@@ -181,14 +170,14 @@ CELERY_RESULT_SERIALIZER  = 'json'
 CELERY_TIMEZONE           = 'America/Bogota'
 CELERY_BEAT_SCHEDULER     = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-# Reintentar conexión al broker al arrancar el worker o el proceso Django.
+
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
 
-# Reintentar conexión en caso de fallo
+
 CELERY_BROKER_CONNECTION_RETRY           = True
 CELERY_BROKER_CONNECTION_MAX_RETRIES     = 10
 
-# pyamqp transport options
+
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     'connect_timeout':  10,
     'max_retries':       5,
@@ -197,35 +186,15 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
     'interval_max':      3.0,
 }
 
-# ── FIX DEFINITIVO — "No hostname was supplied. Reverting to default 'localhost'" ──
-#
-# Causa raíz (kombu 5.3+ con pyamqp):
-#   Cuando la conexión del pool AMQP se corrompe o expira, kombu intenta
-#   reconectar iterando su lista de failover. Con un solo broker configurado,
-#   la lista de failover queda vacía o con una entrada '', que kombu parsea
-#   como host vacío → sustituye por 'localhost' → Connection refused.
-#
-#   CELERY_BROKER_POOL_LIMIT = None desactiva el pool, pero en el proceso
-#   Django (Daphne), la instancia Celery puede NO respetar este límite al
-#   construir las conexiones internas de kombu BrokerConnection — porque
-#   BrokerConnection inicializa su lista de failover ANTES de que el pool
-#   limit se aplique al objeto Celery.
-#
-# Solución en tres capas:
-#   1. POOL_LIMIT = None  → sin pool, cada .delay() abre conexión fresca.
-#   2. BROKER_FAILOVER_STRATEGY = 'round-robin' → aunque la lista de failover
-#      esté vacía, kombu no sustituye por localhost; simplemente reintenta
-#      contra el broker principal de la URL.
-#   3. BROKER_USE_SSL = False (explícito) → evita que kombu intente construir
-#      una lista de failover SSL alternativa que también produce host vacío.
+
 CELERY_BROKER_POOL_LIMIT          = None
 CELERY_BROKER_FAILOVER_STRATEGY   = 'round-robin'
 CELERY_BROKER_USE_SSL             = False
 
-# Heartbeat
+
 CELERY_BROKER_HEARTBEAT = 60
 
-# Política de reintento automático para .delay() / .apply_async() desde Django.
+
 CELERY_TASK_PUBLISH_RETRY        = True
 CELERY_TASK_PUBLISH_RETRY_POLICY = {
     'max_retries': 3,
@@ -238,13 +207,11 @@ CELERY_TASK_TIME_LIMIT      = 480
 CELERY_TASK_SOFT_TIME_LIMIT = 420
 CELERY_TASK_ACKS_LATE             = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-# de RabbitMQ 3.13+. Con PREFETCH_MULTIPLIER=1 y concurrency=1 → 1 tarea a la vez.
-CELERY_WORKER_PREFETCH_COUNT      = 1
-CELERY_WORKER_MAX_MEMORY_PER_CHILD = 1500000  # KB = ~1.5 GB
 
-# Evita el warning "transient_nonexcl_queues deprecated" de RabbitMQ 3.13+.
-# Sin durable=True las colas son transient → se eliminan cuando el worker muere
-# → las tareas pendientes se pierden.
+CELERY_WORKER_PREFETCH_COUNT      = 1
+CELERY_WORKER_MAX_MEMORY_PER_CHILD = 1500000
+
+
 from kombu import Exchange, Queue
 CELERY_TASK_QUEUES = (
     Queue('default',        Exchange('default',        type='direct'), routing_key='default',        durable=True),
@@ -285,17 +252,15 @@ USE_TZ        = True
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ── Seguridad HTTP — cabeceras de defensa en profundidad ──────────────────────
-# Estas cabeceras aplican tanto en desarrollo como en producción.
-# production.py añade las directivas HTTPS-only encima de estas.
-SECURE_CONTENT_TYPE_NOSNIFF = True       # Previene MIME-sniffing attacks
-SECURE_BROWSER_XSS_FILTER   = True       # X-XSS-Protection: 1; mode=block (IE/Edge legacy)
-X_FRAME_OPTIONS              = 'DENY'    # Previene clickjacking
+
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_BROWSER_XSS_FILTER   = True
+X_FRAME_OPTIONS              = 'DENY'
 REFERRER_POLICY              = 'strict-origin-when-cross-origin'
 
-# Límite de tamaño de archivo en uploads (55 MB — consistente con nginx.conf)
-DATA_UPLOAD_MAX_MEMORY_SIZE  = 57_671_680   # 55 MB en bytes
-FILE_UPLOAD_MAX_MEMORY_SIZE  = 57_671_680   # 55 MB en bytes
+
+DATA_UPLOAD_MAX_MEMORY_SIZE  = 57_671_680
+FILE_UPLOAD_MAX_MEMORY_SIZE  = 57_671_680
 
 from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
@@ -309,29 +274,7 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# ── Logging — sistema IDS v2 para el pipeline del chatbot ────────────────────
-# El IDS escribe a DOS destinos en paralelo:
-#   1. /app/logs/chatbot_ids.log  — JSON-Lines, rotación diaria, 7 días
-#   2. stdout                     — líneas legibles para docker logs
-#
-# Filtrar errores:
-#   docker compose exec backend grep '"level":"ERROR"' /app/logs/chatbot_ids.log
-# Ver diagnóstico de broker:
-#   docker compose exec backend grep 'broker_diagnostic_snapshot' /app/logs/chatbot_ids.log | tail -1 | python3 -m json.tool
-# Seguimiento en tiempo real:
-#   docker compose exec backend tail -f /app/logs/chatbot_ids.log | python3 -c "
-#   import sys,json
-#   for l in sys.stdin:
-#       try:
-#           d=json.loads(l)
-#           ex={k:v for k,v in d.items() if k not in('ts','ms','level','cat','conv','msg','proc','pid','trace')}
-#           print(f'[{d["ts"]}][{d["proc"]:<14}][{d["cat"]:<7}] {d.get("msg","")} {ex}')
-#       except: print(l,end='')
-#   "
-#
-# NOTA: el logger 'auditcore.chatbot.ids' NO necesita handlers en este bloque LOGGING;
-# chatbot_logger.py los añade directamente al importarse (funciona en Daphne, Celery worker
-# y Celery beat sin depender del orden de inicialización de Django).
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -341,7 +284,7 @@ LOGGING = {
             'style': '{',
         },
         'ids': {
-            # Formato compacto — el prefijo [CHATBOT-IDS] ya identifica la fuente
+
             'format': '{asctime} {message}',
             'style': '{',
         },
@@ -357,15 +300,15 @@ LOGGING = {
         },
     },
     'loggers': {
-        # IDS principal — handlers gestionados por chatbot_logger.py (archivo + consola).
-        # handlers:[] aquí evita duplicados; propagate=False evita que lleguen al root.
+
+
         'auditcore.chatbot.ids': {
             'handlers': [],
             'level': 'DEBUG',
             'propagate': False,
         },
-        # kombu/amqp — capturar el WARNING "No hostname was supplied" que delata el bug.
-        # Sin estos loggers el warning va al root y puede perderse en el ruido.
+
+
         'kombu': {
             'handlers': ['console'],
             'level': 'WARNING',
@@ -376,13 +319,13 @@ LOGGING = {
             'level': 'WARNING',
             'propagate': False,
         },
-        # Django Channels — ver WSCONNECT/WSDISCONNECT del servidor
+
         'django.channels': {
             'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
-        # Celery — ver received/succeeded/failed por tarea
+
         'celery': {
             'handlers': ['console'],
             'level': 'INFO',

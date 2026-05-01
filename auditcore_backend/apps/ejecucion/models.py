@@ -2,6 +2,7 @@ import uuid, hashlib
 from django.db import models
 from django.conf import settings
 
+_EXPEDIENTE_FK = 'expedientes.Expediente'
 
 class Hallazgo(models.Model):
     TIPO_CHOICES = [
@@ -17,7 +18,7 @@ class Hallazgo(models.Model):
     ]
 
     id             = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    expediente     = models.ForeignKey('expedientes.Expediente', on_delete=models.CASCADE, related_name='hallazgos')
+    expediente     = models.ForeignKey(_EXPEDIENTE_FK, on_delete=models.CASCADE, related_name='hallazgos')
     tipo           = models.CharField(max_length=20, choices=TIPO_CHOICES, default='HALLAZGO')
     nivel_criticidad = models.CharField(max_length=15, choices=CRITICIDAD_CHOICES, default='MENOR')
     titulo         = models.CharField(max_length=300)
@@ -44,7 +45,7 @@ def evidencia_upload_path(instance, filename):
 
 class Evidencia(models.Model):
     id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    expediente   = models.ForeignKey('expedientes.Expediente', on_delete=models.CASCADE, related_name='evidencias')
+    expediente   = models.ForeignKey(_EXPEDIENTE_FK, on_delete=models.CASCADE, related_name='evidencias')
     hallazgo     = models.ForeignKey(Hallazgo, on_delete=models.SET_NULL, null=True, blank=True, related_name='evidencias')
     archivo      = models.FileField(upload_to=evidencia_upload_path)
     nombre_original = models.CharField(max_length=255)
@@ -59,9 +60,8 @@ class Evidencia(models.Model):
         db_table = 'evidencias'
 
     def save(self, *args, **kwargs):
-        # InMemoryUploadedFile may not be seekable in all contexts
-        # (e.g. after the request cycle ends or in some test environments).
-        # DocumentoExpediente already had this protection — Evidencia didn't.
+
+
         if self.archivo and not self.hash_sha256:
             try:
                 self.archivo.seek(0)
@@ -71,7 +71,7 @@ class Evidencia(models.Model):
                 self.hash_sha256 = sha256.hexdigest()
                 self.archivo.seek(0)
             except Exception:
-                pass  # Si el archivo no es seekable, ignorar el hash
+                pass
         super().save(*args, **kwargs)
 
 
@@ -82,7 +82,7 @@ class ChecklistEjecucion(models.Model):
     ]
 
     id           = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    expediente   = models.ForeignKey('expedientes.Expediente', on_delete=models.CASCADE, related_name='checklist')
+    expediente   = models.ForeignKey(_EXPEDIENTE_FK, on_delete=models.CASCADE, related_name='checklist')
     item         = models.ForeignKey('tipos_auditoria.ChecklistItem', on_delete=models.PROTECT)
     estado       = models.CharField(max_length=10, choices=ESTADO_CHOICES, default='PENDIENTE')
     evidencia    = models.ForeignKey(Evidencia, on_delete=models.SET_NULL, null=True, blank=True)
@@ -93,5 +93,4 @@ class ChecklistEjecucion(models.Model):
     class Meta:
         db_table = 'checklist_ejecucion'
         unique_together = [['expediente', 'item']]
-
 

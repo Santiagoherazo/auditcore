@@ -1,12 +1,3 @@
-/// session_service.dart — Cierre de sesión centralizado.
-///
-/// PROBLEMA ORIGINAL: el logout en dashboard_screen.dart solo llamaba a
-/// authProvider.notifier.logout() + context.go('/login'), dejando los 4
-/// WebSockets (chatbot, notificaciones, dashboard, expediente) vivos e
-/// intentando reconectar con backoff → UI bloqueada hasta recargar la página.
-///
-/// SOLUCIÓN: este servicio desconecta todos los WS antes de limpiar tokens,
-/// limpia el estado del chat, y muestra un mensaje de confirmación.
 library;
 
 import 'package:flutter/material.dart';
@@ -18,9 +9,7 @@ import 'websocket_service.dart';
 class SessionService {
   SessionService._();
 
-  /// Cierra la sesión correctamente desde cualquier pantalla.
-  ///
-  /// [showConfirmDialog] — false para logout forzado (token expirado).
+
   static Future<void> logout(
     BuildContext context,
     WidgetRef ref, {
@@ -35,9 +24,7 @@ class SessionService {
       if (confirmed != true) return;
     }
 
-    // 1. Desconectar TODOS los WebSockets antes de limpiar tokens.
-    //    El orden importa: si se limpian tokens primero los sockets intentan
-    //    reconectar con token nulo generando bucles de error.
+
     await Future.wait([
       wsChatbot.disconnect(),
       wsNotificaciones.disconnect(),
@@ -45,13 +32,13 @@ class SessionService {
       wsExpediente.disconnect(),
     ]);
 
-    // 2. Limpiar historial del chat en memoria.
+
     ref.read(chatProvider.notifier).limpiar();
 
-    // 3. Blacklist del refresh token en backend + limpiar storage local.
+
     await ref.read(authProvider.notifier).logout();
 
-    // 4. Navegar a /login y mostrar snackbar de confirmación.
+
     if (context.mounted) {
       context.go('/login');
       WidgetsBinding.instance.addPostFrameCallback((_) {

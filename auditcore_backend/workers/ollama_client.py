@@ -1,16 +1,3 @@
-"""
-ollama_client.py — Cliente unificado para Ollama (local Docker o servidor remoto HTTPS).
-
-Soporta dos modos según OLLAMA_BASE_URL:
-  · http://ollama:11434  — contenedor Docker local (sin SSL)
-  · https://host:puerto  — servidor remoto con HTTPS (SSL verificado o con verify=False configurable)
-
-Uso:
-    from workers.ollama_client import OllamaClient
-    client = OllamaClient()
-    ok, err = client.verificar()
-    respuesta, tokens = client.chat_stream(sistema, historial, mensaje, conv_id_for_ws)
-"""
 import json
 import logging
 import time
@@ -37,7 +24,7 @@ def _get_config():
 
 
 def _session(base_url: str, ssl_verify):
-    """Crea una sesión requests con la configuración SSL correcta."""
+
     s = requests.Session()
     if base_url.startswith('https://'):
         s.verify = ssl_verify
@@ -48,7 +35,7 @@ def _session(base_url: str, ssl_verify):
 
 
 def verificar_ollama(conv_id=None) -> tuple[bool, str]:
-    """Verifica que el servidor Ollama esté disponible. Devuelve (ok, error_msg)."""
+
     base_url, _, ssl_verify = _get_config()
     t0 = time.monotonic()
     ids_log(IDS.OLLAMA, conv_id=conv_id, msg='preflight_check', url=f'{base_url}/api/tags')
@@ -84,19 +71,8 @@ def verificar_ollama(conv_id=None) -> tuple[bool, str]:
 
 def chat_stream(sistema: str, historial: list, mensaje: str, conv_id: str,
                 on_token=None) -> tuple[str, int]:
-    """
-    Llamada streaming a Ollama /api/chat.
 
-    Args:
-        sistema:   Prompt de sistema.
-        historial: Lista de {rol, contenido}.
-        mensaje:   Mensaje del usuario.
-        conv_id:   UUID de conversación (para logs).
-        on_token:  Callable(str) llamado por cada chunk recibido.
 
-    Returns:
-        (texto_completo, total_tokens)
-    """
     base_url, model, ssl_verify = _get_config()
 
     ok, err = verificar_ollama(conv_id)
@@ -192,7 +168,7 @@ def chat_stream(sistema: str, historial: list, mensaje: str, conv_id: str,
 
 def chat_complete(sistema: str, prompt: str, conv_id: str = '',
                   temperature: float = 0.3, max_tokens: int = 1200) -> tuple[str, int]:
-    """Llamada no-streaming para análisis de documentos y formularios."""
+
     base_url, model, ssl_verify = _get_config()
 
     ok, err = verificar_ollama(conv_id or None)
