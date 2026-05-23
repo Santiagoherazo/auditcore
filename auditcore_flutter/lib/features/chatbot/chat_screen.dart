@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart'; //lo agrego E
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../core/api/api_client.dart';
@@ -44,6 +45,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String _mensajeEstado  = '';
 
 
+  /**static const _mensajesEspera = [
+    (10,  'Procesando...'),
+    (25,  'Generando respuesta...'),
+    (45,  'Cargando modelo en GPU... (primera consulta tarda ~40s)'),
+    (90,  'El modelo está casi listo. Próximas respuestas serán más rápidas.'),
+    (150, 'Procesando tu consulta. Llama 3.1 en GPU...'),
+    (240, 'Respuesta en camino. El sistema sigue procesando.'),
+  ];*/
   static const _mensajesEspera = [
     (10,  'Procesando...'),
     (25,  'Generando respuesta...'),
@@ -51,10 +60,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     (90,  'El modelo está casi listo. Próximas respuestas serán más rápidas.'),
     (150, 'Procesando tu consulta. Llama 3.1 en GPU...'),
     (240, 'Respuesta en camino. El sistema sigue procesando.'),
-  ];
+  ]; //Cambios mios
 
 
-  static const _timeoutSeg = 420;
+ /**  static const _timeoutSeg = 420;*/
+ static const _timeoutSeg = 60;
 
   @override
   void initState() {
@@ -338,7 +348,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       rolUsuario:    usuario?.rol ?? '',
       nombreUsuario: usuario?.nombreCompleto ?? '',
       titulo:        'AuditBot',
-      subtitulo:     'IA local · Conversación activa en sesión',
+      subtitulo:     'AuditBot · Asistente de auditorías ',//IA local ·Conversación activa en sesión lo cambie yo
       showBottomNav: true,
       actions: [
         _OllamaStatusChip(),
@@ -673,7 +683,7 @@ class _EmptyChat extends StatelessWidget {
               fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
           const SizedBox(height: 6),
           const Text(
-            'IA local con Llama 3.1.\nPregúntame sobre auditorías, expedientes y certificaciones.',
+            'Asistente inteligente de AuditCore.\nPregúntame sobre auditorías, expedientes y certificaciones.', //IA local con Llama 3.1. lo cambie
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.5),
           ),
@@ -735,13 +745,29 @@ class _Burbuja extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
+           /**   Text(
               contenido.isEmpty ? ' ' : contenido,
               style: TextStyle(
                 fontSize: 13, height: 1.5,
                 color: esUsuario ? Colors.white : AppColors.textPrimary,
               ),
-            ),
+            ),**/
+            esUsuario
+              ? Text(
+                  contenido.isEmpty ? ' ' : contenido,
+                  style: const TextStyle(
+                    fontSize: 13, height: 1.5,
+                    color: Colors.white,
+                  ),
+                )
+              : MarkdownBody(
+                  data: contenido.isEmpty ? ' ' : contenido,
+                  styleSheet: MarkdownStyleSheet(
+                    p: const TextStyle(fontSize: 13, height: 1.5, color: AppColors.textPrimary),
+                    strong: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                    code: const TextStyle(fontSize: 12, backgroundColor: AppColors.bg),
+                  ),
+                ),
 
             if (enStreaming && !esUsuario)
               Container(
